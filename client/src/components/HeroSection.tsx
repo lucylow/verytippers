@@ -86,12 +86,20 @@ export function HeroSection() {
                 size="lg" 
                 className="bg-primary hover:bg-primary/90 gap-2"
                 onClick={async () => {
-                  toast.info("Simulating tip to @alice...");
-                  const result = await sendTipToBackend("userA", "userB", 1, "Great job on the hackathon!");
-                  if (result.success) {
-                    toast.success(result.message);
-                  } else {
-                    toast.error(result.message);
+                  try {
+                    toast.info("Simulating tip to @alice...");
+                    const result = await sendTipToBackend("userA", "userB", 1, "Great job on the hackathon!");
+                    if (result.success) {
+                      toast.success(result.message);
+                    } else {
+                      toast.error(result.message || "Failed to send tip");
+                    }
+                  } catch (error) {
+                    console.error("Error sending tip:", error);
+                    const errorMessage = error instanceof Error 
+                      ? error.message 
+                      : "An unexpected error occurred while sending the tip";
+                    toast.error(errorMessage);
                   }
                 }}
               >

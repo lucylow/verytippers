@@ -76,7 +76,7 @@
 
 /// <reference types="@types/google.maps" />
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePersistFn } from "@/hooks/usePersistFn";
 import { cn } from "@/lib/utils";
 
@@ -92,19 +92,48 @@ const FORGE_BASE_URL =
   "https://forge.butterfly-effect.dev";
 const MAPS_PROXY_URL = `${FORGE_BASE_URL}/v1/maps/proxy`;
 
-function loadMapScript() {
-  return new Promise(resolve => {
+function loadMapScript(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    // Check if script is already loaded
+    if (window.google?.maps) {
+      resolve();
+      return;
+    }
+
+    // Check if API key is available
+    if (!API_KEY) {
+      reject(new Error("Google Maps API key is not configured. Please set VITE_FRONTEND_FORGE_API_KEY environment variable."));
+      return;
+    }
+
     const script = document.createElement("script");
     script.src = `${MAPS_PROXY_URL}/maps/api/js?key=${API_KEY}&v=weekly&libraries=marker,places,geocoding,geometry`;
     script.async = true;
     script.crossOrigin = "anonymous";
+    
+    const timeout = setTimeout(() => {
+      script.remove();
+      reject(new Error("Google Maps script loading timeout. Please check your network connection."));
+    }, 30000); // 30 second timeout
+
     script.onload = () => {
-      resolve(null);
+      clearTimeout(timeout);
+      // Verify that google.maps is actually available
+      if (!window.google?.maps) {
+        script.remove();
+        reject(new Error("Google Maps script loaded but API is not available."));
+        return;
+      }
       script.remove(); // Clean up immediately
+      resolve();
     };
-    script.onerror = () => {
-      console.error("Failed to load Google Maps script");
+
+    script.onerror = (error) => {
+      clearTimeout(timeout);
+      script.remove();
+      reject(new Error(`Failed to load Google Maps script. This may be due to network issues or an invalid API key.`));
     };
+
     document.head.appendChild(script);
   });
 }
@@ -124,30 +153,90 @@ export function MapView({
 }: MapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<google.maps.Map | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const init = usePersistFn(async () => {
-    await loadMapScript();
-    if (!mapContainer.current) {
-      console.error("Map container not found");
-      return;
-    }
-    map.current = new window.google.maps.Map(mapContainer.current, {
-      zoom: initialZoom,
-      center: initialCenter,
-      mapTypeControl: true,
-      fullscreenControl: true,
-      zoomControl: true,
-      streetViewControl: true,
-      mapId: "DEMO_MAP_ID",
-    });
-    if (onMapReady) {
-      onMapReady(map.current);
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      await loadMapScript();
+      
+      if (!mapContainer.current) {
+        throw new Error("Map container element not found");
+      }
+
+      if (!window.google?.maps) {
+        throw new Error("Google Maps API is not available after script load");
+      }
+
+      try {
+        map.current = new window.google.maps.Map(mapContainer.current, {
+          zoom: initialZoom,
+          center: initialCenter,
+          mapTypeControl: true,
+          fullscreenControl: true,
+          zoomControl: true,
+          streetViewControl: true,
+          mapId: "DEMO_MAP_ID",
+        });
+
+        if (onMapReady) {
+          try {
+            onMapReady(map.current);
+          } catch (callbackError) {
+            console.error("Error in onMapReady callback:", callbackError);
+            // Don't fail the entire map initialization if callback fails
+          }
+        }
+      } catch (mapError) {
+        throw new Error(
+          `Failed to initialize map: ${mapError instanceof Error ? mapError.message : "Unknown error"}`
+        );
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error 
+        ? err.message 
+        : "Failed to load map";
+      console.error("Map initialization error:", err);
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
     }
   });
 
   useEffect(() => {
     init();
   }, [init]);
+
+  if (error) {
+    return (
+      <div className={cn("w-full h-[500px] flex items-center justify-center bg-muted rounded-lg", className)}>
+        <div className="text-center p-6 space-y-2">
+          <p className="text-destructive font-medium">Failed to load map</p>
+          <p className="text-sm text-muted-foreground">{error}</p>
+          <button
+            onClick={() => init()}
+            className="mt-4 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className={cn("w-full h-[500px] flex items-center justify-center bg-muted rounded-lg", className)}>
+        <div className="text-center space-y-2">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="text-sm text-muted-foreground">Loading map...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div ref={mapContainer} className={cn("w-full h-[500px]", className)} />
