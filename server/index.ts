@@ -3,12 +3,16 @@ import { createServer } from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { TipService } from './services/TipService';
+import { TipAnalyticsService } from './services/TipAnalyticsService';
+import { HuggingFaceService } from './services/HuggingFaceService';
 import { config } from './config';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const tipService = new TipService();
+const analyticsService = new TipAnalyticsService();
+const hfService = new HuggingFaceService();
 
 async function startServer() {
     const app = express();

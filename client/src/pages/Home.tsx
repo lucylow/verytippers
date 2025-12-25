@@ -1,9 +1,9 @@
 import { Navbar } from "@/components/Navbar";
 import { HeroSection } from "@/components/HeroSection";
 import { FeaturesSection } from "@/components/FeaturesSection";
-import { HowItWorksSection } from "@/components/HowItWorksSection";
-import { LeaderboardSection } from "@/components/LeaderboardSection";
-import { BadgesSection } from "@/components/BadgesSection";
+import { DemoSection } from "@/components/DemoSection";
+import { IntegrationSection } from "@/components/IntegrationSection";
+import { TeamSection } from "@/components/TeamSection";
 import { CTASection } from "@/components/CTASection";
 import { Footer } from "@/components/Footer";
 
@@ -14,9 +14,9 @@ export default function Home() {
       <main>
         <HeroSection />
         <FeaturesSection />
-        <HowItWorksSection />
-        <LeaderboardSection />
-        <BadgesSection />
+        <DemoSection />
+        <IntegrationSection />
+        <TeamSection />
         <CTASection />
       </main>
       <Footer />

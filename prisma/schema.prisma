@@ -8,13 +8,16 @@ datasource db {
 }
 
 model User {
-  id            String   @id // Verychat User ID
-  walletAddress String   @unique
-  publicKey     String
-  tipsSent      Tip[]    @relation("TipsSent")
-  tipsReceived  Tip[]    @relation("TipsReceived")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                 String                @id // Verychat User ID
+  walletAddress      String                @unique
+  publicKey          String
+  tipsSent           Tip[]                 @relation("TipsSent")
+  tipsReceived       Tip[]                 @relation("TipsReceived")
+  content            Content[]             @relation("ContentCreator")
+  subscriptions      ContentSubscription[] @relation("Subscriber")
+  creatorSubscriptions ContentSubscription[] @relation("Creator")
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
 }
 
 model Tip {
@@ -23,6 +26,8 @@ model Tip {
   sender        User     @relation("TipsSent", fields: [senderId], references: [id])
   recipientId   String
   recipient     User     @relation("TipsReceived", fields: [recipientId], references: [id])
+  contentId     String?  // Link tip to specific content
+  content       Content? @relation("ContentTips", fields: [contentId], references: [id])
   amount        String
   token         String
   message       String?
@@ -40,4 +45,69 @@ model Badge {
   imageUrl    String
   criteria    Json
   createdAt   DateTime @default(now())
+}
+
+model Content {
+  id                String            @id @default(uuid())
+  creatorId         String
+  creator           User              @relation("ContentCreator", fields: [creatorId], references: [id])
+  title             String
+  description       String?
+  contentText       String?           // AI-generated text content
+  contentHash       String?           // IPFS hash of content
+  contentType       String            @default("TEXT") // TEXT, IMAGE, VIDEO, AUDIO, etc.
+  isAI              Boolean           @default(true)
+  aiModel           String?           // Which AI model generated this
+  qualityScore      Float?            // AI-assessed quality score (0-1)
+  monetizationType  String            @default("TIP") // TIP, SUBSCRIPTION, PAY_PER_VIEW, FREE
+  price             String?           // Price for subscription/pay-per-view (in token)
+  token             String?           // Token for pricing
+  totalEarnings     String            @default("0") // Total earnings from this content
+  totalTips         Int               @default(0) // Number of tips received
+  viewCount         Int               @default(0)
+  engagementScore   Float             @default(0) // Calculated engagement score
+  isPublished       Boolean           @default(false)
+  isPremium         Boolean           @default(false) // Premium content flag
+  tips              Tip[]             @relation("ContentTips")
+  analytics         ContentAnalytics[] @relation("ContentAnalytics")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@index([creatorId])
+  @@index([isPublished])
+  @@index([qualityScore])
+  @@index([totalEarnings])
+}
+
+model ContentSubscription {
+  id           String   @id @default(uuid())
+  subscriberId String
+  subscriber   User     @relation("Subscriber", fields: [subscriberId], references: [id])
+  creatorId    String
+  creator      User     @relation("Creator", fields: [creatorId], references: [id])
+  token        String
+  amount       String   // Monthly subscription amount
+  status       String   @default("ACTIVE") // ACTIVE, CANCELLED, EXPIRED
+  startDate    DateTime @default(now())
+  endDate      DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([subscriberId, creatorId])
+  @@index([creatorId])
+  @@index([subscriberId])
+}
+
+model ContentAnalytics {
+  id              String   @id @default(uuid())
+  contentId       String
+  content         Content  @relation("ContentAnalytics", fields: [contentId], references: [id], onDelete: Cascade)
+  date            DateTime @default(now())
+  views           Int      @default(0)
+  tips            Int      @default(0)
+  earnings        String   @default("0")
+  engagementScore Float    @default(0)
+  createdAt       DateTime @default(now())
+
+  @@index([contentId, date])
 }
