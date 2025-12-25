@@ -1,6 +1,7 @@
 import { DatabaseService } from './DatabaseService';
 import { HuggingFaceService } from './HuggingFaceService';
 import { IpfsService } from './IpfsService';
+import { TipService } from './TipService';
 import { ethers } from 'ethers';
 
 export interface ContentCreateInput {
@@ -38,10 +39,12 @@ export class ContentService {
     private db = DatabaseService.getInstance();
     private hfService: HuggingFaceService;
     private ipfsService: IpfsService;
+    private tipService: TipService;
 
     constructor() {
         this.hfService = new HuggingFaceService();
         this.ipfsService = new IpfsService();
+        this.tipService = new TipService();
     }
 
     /**
@@ -257,41 +260,23 @@ export class ContentService {
                 return { success: false, message: 'Content is not published' };
             }
 
-            // Process tip through TipService
+            // Process tip through TipService (contentId will be linked automatically)
             const tipResult = await this.tipService.processTip(
                 senderId,
                 content.creatorId,
                 amount,
                 token,
-                message
+                message,
+                contentId,
+                undefined // options
             );
 
             if (!tipResult.success) {
                 return tipResult;
             }
 
-            // Update content earnings and tip count
-            const currentEarnings = ethers.parseUnits(content.totalEarnings || '0', 18);
-            const tipAmount = ethers.parseUnits(amount, 18);
-            const newEarnings = currentEarnings + tipAmount;
-            const newEarningsString = ethers.formatUnits(newEarnings, 18);
-
-            await this.db.content.update({
-                where: { id: contentId },
-                data: {
-                    totalEarnings: newEarningsString,
-                    totalTips: { increment: 1 },
-                    engagementScore: this.calculateEngagementScore(content.viewCount, content.totalTips + 1, newEarningsString)
-                }
-            });
-
-            // Link tip to content
-            if (tipResult.tipId) {
-                await this.db.tip.update({
-                    where: { id: tipResult.tipId },
-                    data: { contentId: contentId }
-                });
-            }
+            // Note: Content earnings will be updated by TipService's handleBlockchainEvent
+            // when the tip transaction is confirmed on-chain
 
             return { success: true, tipId: tipResult.tipId };
         } catch (error) {

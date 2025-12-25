@@ -168,6 +168,7 @@ export class TipService {
         amount: string,
         token: string,
         message?: string,
+        contentId?: string,
         options?: { skipModeration?: boolean; skipQueue?: boolean }
     ): Promise<TipResult> {
         // 1. Validate input
@@ -274,6 +275,7 @@ export class TipService {
                         amount,
                         token,
                         message: message || null,
+                        contentId: contentId || null,
                         status: 'PENDING'
                     }
                 });
@@ -424,6 +426,41 @@ export class TipService {
                     where: { id: tip.id },
                     data: { status: 'COMPLETED', txHash: eventData.event?.transactionHash || txHash }
                 });
+
+                // Update content earnings if tip is linked to content
+                if (tip.contentId) {
+                    try {
+                        const content = await this.db.content.findUnique({ where: { id: tip.contentId } });
+                        if (content) {
+                            const currentEarnings = ethers.parseUnits(content.totalEarnings || '0', 18);
+                            const tipAmount = ethers.parseUnits(tip.amount, 18);
+                            const newEarnings = currentEarnings + tipAmount;
+                            const newEarningsString = ethers.formatUnits(newEarnings, 18);
+
+                            // Calculate engagement score
+                            const viewCount = content.viewCount || 0;
+                            const tipCount = (content.totalTips || 0) + 1;
+                            const viewsPerTip = viewCount > 0 ? tipCount / viewCount : 0;
+                            const earnings = parseFloat(newEarningsString) || 0;
+                            const viewScore = Math.min(1, viewCount / 1000);
+                            const tipScore = Math.min(1, viewsPerTip * 10);
+                            const earningsScore = Math.min(1, earnings / 100);
+                            const engagementScore = Math.round((viewScore * 0.4 + tipScore * 0.3 + earningsScore * 0.3) * 100) / 100;
+
+                            await this.db.content.update({
+                                where: { id: tip.contentId },
+                                data: {
+                                    totalEarnings: newEarningsString,
+                                    totalTips: { increment: 1 },
+                                    engagementScore
+                                }
+                            });
+                        }
+                    } catch (contentError) {
+                        console.error(`Error updating content earnings for tip ${tip.id}:`, contentError);
+                        // Don't fail the entire event handling if content update fails
+                    }
+                }
 
                 // Clear analytics cache
                 await this.analyticsService.clearCache();
