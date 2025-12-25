@@ -1,0 +1,43 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id // Verychat User ID
+  walletAddress String   @unique
+  publicKey     String
+  tipsSent      Tip[]    @relation("TipsSent")
+  tipsReceived  Tip[]    @relation("TipsReceived")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Tip {
+  id            String   @id @default(uuid())
+  senderId      String
+  sender        User     @relation("TipsSent", fields: [senderId], references: [id])
+  recipientId   String
+  recipient     User     @relation("TipsReceived", fields: [recipientId], references: [id])
+  amount        String
+  token         String
+  message       String?
+  messageHash   String?  // IPFS hash
+  txHash        String?  @unique
+  status        String   @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Badge {
+  id          String   @id @default(uuid())
+  name        String
+  description String
+  imageUrl    String
+  criteria    Json
+  createdAt   DateTime @default(now())
+}
