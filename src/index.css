@@ -106,6 +106,18 @@
   .animate-slide-up {
     animation: slide-up 0.5s ease-out forwards;
   }
+
+  .animate-bounce-in {
+    animation: bounce-in 0.5s ease;
+  }
+
+  .animate-slide-in-right {
+    animation: slide-in-right 0.3s ease-out;
+  }
+
+  .animate-slide-out-right {
+    animation: slide-out-right 0.3s ease-out;
+  }
 }
 
 @keyframes float {
@@ -116,6 +128,22 @@
 @keyframes pulse-glow {
   0%, 100% { opacity: 1; box-shadow: 0 0 20px hsl(var(--primary) / 0.3); }
   50% { opacity: 0.8; box-shadow: 0 0 40px hsl(var(--primary) / 0.5); }
+}
+
+@keyframes bounce-in {
+  0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-10px); }
+  60% { transform: translateY(-5px); }
+}
+
+@keyframes slide-in-right {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slide-out-right {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(100%); opacity: 0; }
 }
 
 @keyframes slide-up {
