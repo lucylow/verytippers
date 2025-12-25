@@ -1,18 +1,52 @@
 import { useEffect, useState } from "react";
 
 export const HeroSection = () => {
-  const [stats, setStats] = useState({ tips: 0, users: 0, volume: 0, response: 0 });
+  const [stats, setStats] = useState({ tips: 12847, users: 3456, volume: 48750, response: 187 });
+  const [animatedStats, setAnimatedStats] = useState({ tips: 0, users: 0, volume: 0, response: 0 });
 
+  // Animate counters on mount
+  useEffect(() => {
+    const duration = 2000;
+    const steps = 60;
+    const stepDuration = duration / steps;
+    let step = 0;
+
+    const interval = setInterval(() => {
+      step++;
+      const progress = step / steps;
+      setAnimatedStats({
+        tips: Math.floor(stats.tips * progress),
+        users: Math.floor(stats.users * progress),
+        volume: Math.floor(stats.volume * progress),
+        response: Math.floor(stats.response * progress),
+      });
+
+      if (step >= steps) {
+        clearInterval(interval);
+        setAnimatedStats(stats);
+      }
+    }, stepDuration);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Periodically update stats
   useEffect(() => {
     const interval = setInterval(() => {
-      setStats({
-        tips: Math.floor(Math.random() * 1000) + 12500,
-        users: Math.floor(Math.random() * 100) + 3400,
-        volume: Math.floor(Math.random() * 10000) + 45000,
-        response: Math.floor(Math.random() * 50) + 150,
-      });
-    }, 3000);
-    setStats({ tips: 12847, users: 3456, volume: 48750, response: 187 });
+      setStats(prev => ({
+        tips: prev.tips + Math.floor(Math.random() * 10),
+        users: prev.users + Math.floor(Math.random() * 3),
+        volume: prev.volume + Math.floor(Math.random() * 100),
+        response: 150 + Math.floor(Math.random() * 50),
+      }));
+      setAnimatedStats(prev => ({
+        tips: prev.tips + Math.floor(Math.random() * 10),
+        users: prev.users + Math.floor(Math.random() * 3),
+        volume: prev.volume + Math.floor(Math.random() * 100),
+        response: 150 + Math.floor(Math.random() * 50),
+      }));
+    }, 5000);
+    
     return () => clearInterval(interval);
   }, []);
 
@@ -23,7 +57,7 @@ export const HeroSection = () => {
       <div className="max-w-7xl mx-auto px-6">
         <div className="grid lg:grid-cols-2 gap-16 items-center">
           <div className="animate-slide-up">
-            <div className="inline-flex items-center gap-2 bg-primary/20 border border-primary/50 px-4 py-2 rounded-full mb-8">
+            <div className="inline-flex items-center gap-2 bg-primary/20 border border-primary/50 px-4 py-2 rounded-full mb-8 animate-pulse-glow">
               <span className="text-xl">🏆</span>
               <span className="text-sm font-medium">VERY Hackathon 2025 Finalist</span>
             </div>
@@ -47,20 +81,25 @@ export const HeroSection = () => {
                 </svg>
                 Try Live Demo
               </a>
-              <button className="border-2 border-border text-foreground px-8 py-4 rounded-xl font-semibold text-lg hover:border-primary hover:bg-primary/10 transition-all flex items-center gap-2">
+              <a 
+                href="https://developers.verylabs.io/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="border-2 border-border text-foreground px-8 py-4 rounded-xl font-semibold text-lg hover:border-primary hover:bg-primary/10 transition-all flex items-center gap-2"
+              >
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
                 </svg>
                 View Documentation
-              </button>
+              </a>
             </div>
 
-            <div className="grid grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
               {[
-                { value: stats.tips.toLocaleString(), label: "Tips Sent" },
-                { value: stats.users.toLocaleString(), label: "Active Users" },
-                { value: `$${stats.volume.toLocaleString()}`, label: "Total Volume" },
-                { value: `${stats.response}ms`, label: "Response" },
+                { value: animatedStats.tips.toLocaleString(), label: "Tips Sent" },
+                { value: animatedStats.users.toLocaleString(), label: "Active Users" },
+                { value: `$${animatedStats.volume.toLocaleString()}`, label: "Total Volume" },
+                { value: `${animatedStats.response}ms`, label: "Response" },
               ].map((stat, i) => (
                 <div key={i} className="text-center">
                   <div className="text-2xl lg:text-3xl font-bold gradient-text">{stat.value}</div>
@@ -105,12 +144,34 @@ export const HeroSection = () => {
 };
 
 const PhoneChatDemo = () => {
-  const messages = [
-    { type: "incoming", sender: "@alice", text: "Just launched my new NFT collection! 🎨", time: "10:42" },
-    { type: "outgoing", text: "Congrats! That's amazing work!", time: "10:43" },
+  const [messageIndex, setMessageIndex] = useState(0);
+  
+  const allMessages = [
+    { type: "incoming", sender: "@alice", text: "Just launched my new NFT collection! 🎨" },
+    { type: "outgoing", text: "Congrats! That's amazing work!" },
     { type: "system", text: "💸 You sent 10 VERY to @alice" },
-    { type: "incoming", sender: "@alice", text: "Thank you so much for the tip! 🙏", time: "10:44" },
+    { type: "incoming", sender: "@alice", text: "Thank you so much for the tip! 🙏" },
+    { type: "incoming", sender: "@bob", text: "Great community here! Love the vibes ✨" },
+    { type: "outgoing", text: "Welcome to the community!" },
   ];
+
+  const [visibleMessages, setVisibleMessages] = useState(allMessages.slice(0, 4));
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setMessageIndex(prev => {
+        const next = (prev + 1) % allMessages.length;
+        if (next < 4) {
+          setVisibleMessages(allMessages.slice(0, 4));
+        } else {
+          setVisibleMessages(allMessages.slice(next - 3, next + 1));
+        }
+        return next;
+      });
+    }, 3000);
+    
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="h-full flex flex-col">
@@ -125,10 +186,10 @@ const PhoneChatDemo = () => {
         </div>
       </div>
       <div className="flex-1 p-4 space-y-3 overflow-y-auto">
-        {messages.map((msg, i) => (
+        {visibleMessages.map((msg, i) => (
           <div
-            key={i}
-            className={`max-w-[80%] p-3 rounded-2xl text-sm ${
+            key={`${msg.text}-${i}`}
+            className={`max-w-[80%] p-3 rounded-2xl text-sm transition-all duration-300 ${
               msg.type === "incoming" 
                 ? "bg-very-gray-800 rounded-bl-sm self-start" 
                 : msg.type === "outgoing"
