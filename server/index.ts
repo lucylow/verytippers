@@ -11,6 +11,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const tipService = new TipService();
+const contentService = new ContentService();
 const analyticsService = new TipAnalyticsService();
 const hfService = new HuggingFaceService();
 
@@ -38,14 +39,14 @@ async function startServer() {
 
     // API Endpoint to simulate a tip from the Verychat Bot
     app.post('/api/v1/tip', async (req: Request, res: Response) => {
-        const { senderId, recipientId, amount, token, message } = req.body;
+        const { senderId, recipientId, amount, token, message, contentId } = req.body;
 
         if (!senderId || !recipientId || !amount || !token) {
             return res.status(400).json({ success: false, message: 'Missing required fields: senderId, recipientId, amount, token' });
         }
 
         try {
-            const result = await tipService.processTip(senderId, recipientId, amount, token, message);
+            const result = await tipService.processTip(senderId, recipientId, amount, token, message, contentId);
             
             if (result.success) {
                 res.status(200).json({
@@ -194,6 +195,170 @@ async function startServer() {
         } catch (error) {
             console.error('Error fetching tip feed:', error);
             res.status(500).json({ success: false, message: 'Failed to fetch feed' });
+        }
+    });
+
+    // --- Content Monetization API Endpoints ---
+
+    // Create new AI-generated content
+    app.post('/api/v1/content', async (req: Request, res: Response) => {
+        const { creatorId, title, description, contentText, contentType, isAI, aiModel, monetizationType, price, token, isPremium } = req.body;
+
+        if (!creatorId || !title) {
+            return res.status(400).json({ success: false, message: 'Missing required fields: creatorId, title' });
+        }
+
+        try {
+            const result = await contentService.createContent({
+                creatorId,
+                title,
+                description,
+                contentText,
+                contentType,
+                isAI,
+                aiModel,
+                monetizationType,
+                price,
+                token,
+                isPremium
+            });
+
+            if (result.success) {
+                res.status(201).json({
+                    success: true,
+                    contentId: result.contentId,
+                    message: 'Content created successfully'
+                });
+            } else {
+                res.status(400).json({
+                    success: false,
+                    message: result.message || 'Failed to create content'
+                });
+            }
+        } catch (error) {
+            console.error('Error creating content:', error);
+            res.status(500).json({ success: false, message: 'Internal server error during content creation.' });
+        }
+    });
+
+    // Publish content
+    app.post('/api/v1/content/:contentId/publish', async (req: Request, res: Response) => {
+        const { contentId } = req.params;
+
+        try {
+            const result = await contentService.publishContent(contentId);
+            
+            if (result.success) {
+                res.status(200).json({ success: true, message: 'Content published successfully' });
+            } else {
+                res.status(400).json({ success: false, message: result.message || 'Failed to publish content' });
+            }
+        } catch (error) {
+            console.error('Error publishing content:', error);
+            res.status(500).json({ success: false, message: 'Internal server error.' });
+        }
+    });
+
+    // Tip content creator
+    app.post('/api/v1/content/:contentId/tip', async (req: Request, res: Response) => {
+        const { contentId } = req.params;
+        const { senderId, amount, token, message } = req.body;
+
+        if (!senderId || !amount || !token) {
+            return res.status(400).json({ success: false, message: 'Missing required fields: senderId, amount, token' });
+        }
+
+        try {
+            const result = await contentService.tipContent(senderId, contentId, amount, token, message);
+            
+            if (result.success) {
+                res.status(200).json({ success: true, tipId: result.tipId, message: 'Tip sent successfully' });
+            } else {
+                res.status(400).json({ success: false, message: result.message || 'Failed to process tip' });
+            }
+        } catch (error) {
+            console.error('Error tipping content:', error);
+            res.status(500).json({ success: false, message: 'Internal server error.' });
+        }
+    });
+
+    // Get content analytics
+    app.get('/api/v1/content/:contentId/analytics', async (req: Request, res: Response) => {
+        const { contentId } = req.params;
+
+        try {
+            const analytics = await contentService.getContentAnalytics(contentId);
+            
+            if (analytics) {
+                res.status(200).json({ success: true, data: analytics });
+            } else {
+                res.status(404).json({ success: false, message: 'Content not found' });
+            }
+        } catch (error) {
+            console.error('Error getting content analytics:', error);
+            res.status(500).json({ success: false, message: 'Internal server error.' });
+        }
+    });
+
+    // Get recommended content
+    app.get('/api/v1/content/recommended', async (req: Request, res: Response) => {
+        const limit = parseInt(req.query.limit as string) || 10;
+
+        try {
+            const content = await contentService.getRecommendedContent(limit);
+            res.status(200).json({ success: true, data: content, count: content.length });
+        } catch (error) {
+            console.error('Error getting recommended content:', error);
+            res.status(500).json({ success: false, message: 'Internal server error.' });
+        }
+    });
+
+    // Create subscription
+    app.post('/api/v1/subscriptions', async (req: Request, res: Response) => {
+        const { subscriberId, creatorId, amount, token } = req.body;
+
+        if (!subscriberId || !creatorId || !amount || !token) {
+            return res.status(400).json({ success: false, message: 'Missing required fields' });
+        }
+
+        try {
+            const result = await contentService.createSubscription(subscriberId, creatorId, amount, token);
+            
+            if (result.success) {
+                res.status(201).json({ success: true, subscriptionId: result.subscriptionId, message: 'Subscription created' });
+            } else {
+                res.status(400).json({ success: false, message: result.message || 'Failed to create subscription' });
+            }
+        } catch (error) {
+            console.error('Error creating subscription:', error);
+            res.status(500).json({ success: false, message: 'Internal server error.' });
+        }
+    });
+
+    // Check content access
+    app.get('/api/v1/content/:contentId/access/:userId', async (req: Request, res: Response) => {
+        const { contentId, userId } = req.params;
+
+        try {
+            const hasAccess = await contentService.hasAccessToContent(userId, contentId);
+            res.status(200).json({ success: true, hasAccess });
+        } catch (error) {
+            console.error('Error checking content access:', error);
+            res.status(500).json({ success: false, message: 'Internal server error.' });
+        }
+    });
+
+    // Record content view
+    app.post('/api/v1/content/:contentId/view', async (req: Request, res: Response) => {
+        const { contentId } = req.params;
+        const { userId } = req.body;
+
+        try {
+            await contentService.recordView(contentId, userId);
+            res.status(200).json({ success: true, message: 'View recorded' });
+        } catch (error) {
+            console.error('Error recording view:', error);
+            res.status(500).json({ success: false, message: 'Internal server error.' });
         }
     });
 
