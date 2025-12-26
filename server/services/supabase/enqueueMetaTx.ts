@@ -54,7 +54,7 @@ export async function updateMetaTxStatus(
   }
 
   // @ts-ignore - Supabase types don't properly infer table schema
-  const { data, error: updateError } = await supabase
+  const { data, error: updateError } = await (supabase as any)
     .from('meta_tx_queue')
     .update(updateData)
     .eq('id', queueId)
