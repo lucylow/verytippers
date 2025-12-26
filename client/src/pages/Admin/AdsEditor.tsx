@@ -1,11 +1,14 @@
 // src/pages/Admin/AdsEditor.tsx - Admin UI for managing ads
 import React, { useState, useEffect } from 'react';
+import { Navbar } from '@/components/Navbar';
+import { Footer } from '@/components/Footer';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Save, X } from 'lucide-react';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 const ADMIN_KEY = import.meta.env.VITE_ADS_ADMIN_KEY || 'changeme';
@@ -105,7 +108,25 @@ export default function AdsEditor() {
   };
 
   return (
-    <div className="container mx-auto p-6 max-w-6xl">
+    <div className="min-h-screen bg-background text-foreground">
+      <ErrorBoundary
+        fallback={
+          <div className="min-h-screen flex items-center justify-center">
+            <div className="text-center">
+              <h1 className="text-2xl font-bold mb-2">Failed to load navigation</h1>
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90"
+              >
+                Reload Page
+              </button>
+            </div>
+          </div>
+        }
+      >
+        <Navbar />
+      </ErrorBoundary>
+      <main className="container mx-auto px-4 py-12 max-w-6xl">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold">Ads Management</h1>
         <Button onClick={handleCreate}>
@@ -246,6 +267,16 @@ export default function AdsEditor() {
           </CardContent>
         </Card>
       )}
+      </main>
+      <ErrorBoundary
+        fallback={
+          <div className="py-4 px-4 text-center text-sm text-muted-foreground">
+            Footer unavailable
+          </div>
+        }
+      >
+        <Footer />
+      </ErrorBoundary>
     </div>
   );
 }

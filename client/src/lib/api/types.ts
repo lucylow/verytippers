@@ -169,11 +169,13 @@ export interface LeaderboardResponse {
 // Badge API Types
 export interface Badge {
   id: string;
+  badgeId: string;
   name: string;
+  emoji: string;
   description: string;
-  icon?: string;
-  rarity?: 'common' | 'rare' | 'epic' | 'legendary';
-  earnedAt?: string;
+  rarity: 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond';
+  awardedAt: string | Date;
+  metadata?: any;
 }
 
 export interface UserBadgesResponse {
@@ -182,7 +184,8 @@ export interface UserBadgesResponse {
     badges: Badge[];
     stats?: {
       totalBadges: number;
-      byRarity?: Record<string, number>;
+      rarityCounts: Record<string, number>;
+      latestBadge: Badge | null;
     };
   };
   error?: string;

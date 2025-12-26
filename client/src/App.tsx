@@ -18,6 +18,7 @@ import CheckoutSuccess from "./pages/CheckoutSuccess";
 import CheckoutCancel from "./pages/CheckoutCancel";
 import TokenEcosystem from "./pages/TokenEcosystem";
 import Verychain from "./pages/Verychain";
+import AdsEditor from "./pages/Admin/AdsEditor";
 import { VoiceTippingButton } from "./components/VoiceTippingButton";
 import { NetworkSelector } from "./components/NetworkSelector";
 import MobileShell from "./components/MobileShell";
