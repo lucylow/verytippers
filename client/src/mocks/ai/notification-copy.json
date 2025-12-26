@@ -1,0 +1,18 @@
+{
+  "type": "ai_notification_copy",
+  "input": {
+    "from_user": "bob",
+    "to_user": "alice",
+    "amount": 5,
+    "currency": "VERY",
+    "message": "Nice work on the PR — really appreciate it!"
+  },
+  "output": {
+    "title": "You received a tip 🎉",
+    "body": "Bob tipped you 5 VERY for your great work on the PR.",
+    "short_toast": "Tip received ✓",
+    "confidence": 0.91
+  }
+}
+
+

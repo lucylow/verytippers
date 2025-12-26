@@ -1,0 +1,12 @@
+{
+  "type": "ai_demo_mode",
+  "status": "enabled",
+  "mock_latency_ms": 420,
+  "responses": {
+    "tip_suggestion": "5 VERY — \"Nice work!\"",
+    "policy_check": "Approved",
+    "notification": "Tip confirmed ✓"
+  }
+}
+
+

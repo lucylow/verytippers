@@ -1,0 +1,16 @@
+{
+  "type": "ai_gas_optimization",
+  "input": {
+    "current_gas_price_gwei": 18,
+    "tips_pending": 14,
+    "average_tip_value": 4.2
+  },
+  "output": {
+    "recommendation": "batch_transactions",
+    "estimated_savings_percent": 37,
+    "batch_size": 5,
+    "explanation": "Batching 5 meta-txs reduces per-tip gas cost under current network conditions."
+  }
+}
+
+

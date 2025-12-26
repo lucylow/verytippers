@@ -326,21 +326,32 @@ Generate 3-5 personalized insights (most important first). Return ONLY valid JSO
       .slice(0, 5);
 
     // Calculate rank (simplified - would need full leaderboard calculation in production)
-    const allUserStats = await db.tip.groupBy({
-      by: ['senderId'],
+    // Fetch all tips and calculate stats manually since amount is a String type
+    const allTips = await db.tip.findMany({
       where: {
         status: 'COMPLETED',
         createdAt: { gte: startDate }
       },
-      _count: { id: true },
-      _sum: { amount: true }
+      select: {
+        senderId: true,
+        amount: true
+      }
     });
 
-    const sortedUsers = allUserStats
-      .map(u => ({
-        userId: u.senderId,
-        tips: u._count.id,
-        amount: BigInt(u._sum.amount || 0)
+    // Group by senderId and calculate stats
+    const userStatsMap = new Map<string, { tips: number; amount: bigint }>();
+    allTips.forEach(tip => {
+      const existing = userStatsMap.get(tip.senderId) || { tips: 0, amount: BigInt(0) };
+      existing.tips += 1;
+      existing.amount += BigInt(tip.amount);
+      userStatsMap.set(tip.senderId, existing);
+    });
+
+    const sortedUsers = Array.from(userStatsMap.entries())
+      .map(([userId, stats]) => ({
+        userId,
+        tips: stats.tips,
+        amount: stats.amount
       }))
       .sort((a, b) => {
         if (a.amount !== b.amount) {

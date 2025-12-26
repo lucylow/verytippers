@@ -1,0 +1,18 @@
+{
+  "type": "ai_leaderboard_tagging",
+  "input": {
+    "user": "alice",
+    "metrics": {
+      "tips_received_30d": 42,
+      "unique_tippers": 18,
+      "average_tip": 6.2
+    }
+  },
+  "output": {
+    "primary_badge": "Community MVP",
+    "secondary_badges": ["Top Helper", "Most Appreciated"],
+    "description": "Recognized for consistent high-value contributions to the community."
+  }
+}
+
+

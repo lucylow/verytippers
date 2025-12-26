@@ -3,6 +3,7 @@
 // Analyzes chat context → suggests personalized amounts + messages
 
 import { z } from 'zod';
+import { mockAITipSuggestion, isDemoMode } from '@/mocks/ai';
 
 // Tip suggestion response schema (TypeScript + Zod validation)
 const TipSuggestionSchema = z.object({
@@ -151,4 +152,5 @@ export class RealTimeTipAnalyzer {
     return 2.5; // Default
   }
 }
+
 

@@ -226,3 +226,4 @@ See `Web3Status.tsx` component for a complete example of using the Web3 hook.
 
 For issues or questions, check the main README or open an issue.
 
+

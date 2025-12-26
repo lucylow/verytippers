@@ -1,0 +1,14 @@
+{
+  "type": "ai_message_tone_analysis",
+  "input": {
+    "message": "Amazing job fixing that issue so fast!"
+  },
+  "output": {
+    "tone": "positive",
+    "emotion": "gratitude",
+    "confidence": 0.93,
+    "labels": ["praise", "appreciation", "collaboration"]
+  }
+}
+
+

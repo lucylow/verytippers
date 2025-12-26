@@ -179,3 +179,4 @@ export const PersonalizedInsights: React.FC<PersonalizedInsightsProps> = ({ user
     </motion.div>
   );
 };
+

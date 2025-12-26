@@ -1,0 +1,22 @@
+{
+  "type": "ai_abuse_detection",
+  "input": {
+    "from_user": "new_user_123",
+    "to_user": "alice",
+    "amount": 40,
+    "currency": "VERY",
+    "recent_behavior": {
+      "tips_last_hour": 6,
+      "unique_recipients": 1,
+      "account_age_days": 2
+    }
+  },
+  "output": {
+    "risk_score": 0.71,
+    "classification": "potential_spam",
+    "recommended_action": "manual_review",
+    "explanation": "High frequency of tips from a new account to a single recipient."
+  }
+}
+
+

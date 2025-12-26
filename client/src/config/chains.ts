@@ -10,3 +10,4 @@ export const VERY_CHAIN_CONFIG = {
   blockExplorerUrls: ['https://explorer.verychain.org']
 } as const;
 
+

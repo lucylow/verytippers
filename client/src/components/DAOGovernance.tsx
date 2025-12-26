@@ -294,3 +294,4 @@ export const DAOGovernance: React.FC = () => {
   );
 };
 
+

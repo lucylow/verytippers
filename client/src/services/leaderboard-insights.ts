@@ -127,3 +127,4 @@ function fallbackInsights(data: LeaderboardData): Insight[] {
 
   return insights;
 }
+
