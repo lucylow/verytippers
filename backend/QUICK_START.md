@@ -26,13 +26,13 @@
 
 4. **Install dependencies and run migrations:**
    ```bash
-   npm install
-   npm run migrate:run
+   pnpm install
+   pnpm run migrate:run
    ```
 
 5. **Start the server:**
    ```bash
-   npm run dev
+   pnpm run dev
    ```
 
 6. **Verify it's working:**
@@ -59,17 +59,17 @@
 
 3. **Install dependencies:**
    ```bash
-   npm install
+   pnpm install
    ```
 
 4. **Run migrations:**
    ```bash
-   npm run migrate:run
+   pnpm run migrate:run
    ```
 
 5. **Start the server:**
    ```bash
-   npm run dev
+   pnpm run dev
    ```
 
 ## Required Environment Variables

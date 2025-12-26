@@ -124,9 +124,9 @@ PORT="3001"
 1. **Create .env file** in the root directory
 2. **Copy the variables above** and fill in your values
 3. **Generate encryption key**: `openssl rand -hex 32`
-4. **Start Docker services**: `npm run db:setup`
-5. **Run migrations**: `npm run db:migrate`
-6. **Start development**: `npm run dev:full`
+4. **Start Docker services**: `pnpm run db:setup`
+5. **Run migrations**: `pnpm run db:migrate`
+6. **Start development**: `pnpm run dev:full`
 
 ## Verification
 
@@ -134,16 +134,16 @@ After setup, verify your configuration:
 
 ```bash
 # Check database connection
-npm run db:studio
+pnpm run db:studio
 
 # Check Redis connection
 redis-cli ping
 
 # Test contracts compilation
-npm run compile
+pnpm run compile
 
 # Test backend
-npm run dev:backend
+pnpm run dev:backend
 ```
 
 ## Security Notes

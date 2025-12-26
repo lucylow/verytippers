@@ -2,7 +2,7 @@
   "name": "verytippers",
   "public": true,
   "build": {
-    "command": "pnpm run build",
+    "command": "pnpm run build:client",
     "publish": "dist/public"
   },
   "env": {

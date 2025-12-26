@@ -7,7 +7,7 @@ echo "🚀 Deploying VeryTippers Backend..."
 docker-compose build
 
 # Run database migrations
-docker-compose run --rm backend npm run migrate:run
+docker-compose run --rm backend pnpm run migrate:run
 
 # Start services
 docker-compose up -d
