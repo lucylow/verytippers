@@ -8,8 +8,28 @@
   "env": {
     "VITE_APP_NETWORK_RPC": "https://rpc.testnet.verychain.org",
     "VITE_APP_CHAIN_ID": "8889",
-    "VITE_APP_RELAYER_URL": "http://localhost:8080",
-    "VITE_APP_WALLET_PROVIDER": "local"
+    "VITE_APP_RELAYER_URL": "",
+    "VITE_APP_WALLET_PROVIDER": "local",
+    "VITE_API_URL": "",
+    "VITE_ADS_ADMIN_KEY": "",
+    "VITE_SUPABASE_URL": "",
+    "VITE_SUPABASE_ANON_KEY": "",
+    "VITE_STRIPE_PUBLISHABLE_KEY": "",
+    "VITE_WEPIN_APP_ID": "",
+    "VITE_WEPIN_APP_KEY": "",
+    "VITE_IPFS_URL": "https://ipfs.infura.io:5001/api/v0",
+    "VITE_FRONTEND_FORGE_API_KEY": "",
+    "VITE_FRONTEND_FORGE_API_URL": "https://forge.butterfly-effect.dev",
+    "VITE_TIP_CONTRACT_ADDRESS": "",
+    "VITE_VERY_TOKEN_ADDRESS": "",
+    "VITE_BADGE_CONTRACT_ADDRESS": "",
+    "VITE_TIP_ROUTER_ADDRESS": "",
+    "VITE_NFT_CONTRACT_ADDRESS": "",
+    "VITE_ENABLE_GAS_SPONSORSHIP": "true",
+    "VITE_ENABLE_MOCK_MODE": "false",
+    "VITE_ENABLE_EVENT_LISTENING": "true",
+    "VITE_OAUTH_PORTAL_URL": "",
+    "VITE_APP_ID": ""
   }
 }
 

@@ -17,6 +17,7 @@ import { config } from './config';
 import adsRouter from './routes/ads';
 import indexerWebhookRouter from './routes/indexerWebhook';
 import checkoutRouter from './routes/checkout';
+import rewardsRouter from './routes/rewards';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -56,6 +57,9 @@ async function startServer() {
 
     // Checkout & monetization routes
     app.use('/api/checkout', checkoutRouter);
+
+    // Rewards API routes
+    app.use('/api/rewards', rewardsRouter);
 
     // Health Check Endpoint
     app.get('/health', (_req: Request, res: Response) => {

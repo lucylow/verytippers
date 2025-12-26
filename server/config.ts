@@ -43,8 +43,12 @@ export const config = {
     TIP_CONTRACT_ADDRESS: process.env.TIP_CONTRACT_ADDRESS || '0xTipContractAddress',
     BADGE_CONTRACT_ADDRESS: process.env.BADGE_CONTRACT_ADDRESS || '0xBadgeContractAddress',
     VERY_TOKEN_ADDRESS: process.env.VERY_TOKEN_ADDRESS || '0xVeryTokenAddress',
+    VERY_REWARDS_CONTRACT_ADDRESS: process.env.VERY_REWARDS_CONTRACT_ADDRESS || '0xVeryRewardsAddress',
     NFT_CONTRACT_ADDRESS: process.env.NFT_CONTRACT_ADDRESS || '0xNFTContractAddress',
     MARKETPLACE_CONTRACT_ADDRESS: process.env.MARKETPLACE_CONTRACT_ADDRESS || '0xMarketplaceAddress',
+    
+    // Reward Signer (KMS/HSM private key - use KMS in production)
+    REWARD_SIGNER_PRIVATE_KEY: process.env.REWARD_SIGNER_PRIVATE_KEY || process.env.SPONSOR_PRIVATE_KEY || '0x0000000000000000000000000000000000000000000000000000000000000001',
 
     // AI/HuggingFace
     HUGGINGFACE_API_KEY: process.env.HUGGINGFACE_API_KEY || 'dummy_hf_key',

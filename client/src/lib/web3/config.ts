@@ -33,7 +33,7 @@ export const VERY_CHAIN = VERY_TESTNET;
 // Contract addresses (mock addresses for hackathon - replace with deployed addresses)
 export const CONTRACTS = {
   tipRouter: {
-    address: process.env.VITE_TIP_CONTRACT_ADDRESS || '0xMockTipRouter000000000000000000000001',
+    address: import.meta.env.VITE_TIP_CONTRACT_ADDRESS || '0xMockTipRouter000000000000000000000001',
     abi: [
       'function tip(address to, uint256 amount, string memory cid, uint256 nonce, uint256 deadline) external',
       'function totalTipsSent(address) view returns (uint256)',
@@ -42,7 +42,7 @@ export const CONTRACTS = {
     ]
   },
   veryToken: {
-    address: process.env.VITE_VERY_TOKEN_ADDRESS || '0xMockVeryToken00000000000000000000001',
+    address: import.meta.env.VITE_VERY_TOKEN_ADDRESS || '0xMockVeryToken00000000000000000000001',
     abi: [
       'function balanceOf(address) view returns (uint256)',
       'function decimals() view returns (uint8)',
@@ -54,7 +54,7 @@ export const CONTRACTS = {
     ]
   },
   badgeFactory: {
-    address: process.env.VITE_BADGE_CONTRACT_ADDRESS || '0xMockBadgeFactory0000000000000000000001',
+    address: import.meta.env.VITE_BADGE_CONTRACT_ADDRESS || '0xMockBadgeFactory0000000000000000000001',
     abi: [
       'function mintBadge(address user, uint256 badgeId) external',
       'function hasBadge(address user, uint256 badgeId) view returns (bool)',
@@ -72,8 +72,8 @@ export const API_ENDPOINTS = {
 
 // Environment flags
 export const FEATURES = {
-  ENABLE_GAS_SPONSORSHIP: process.env.VITE_ENABLE_GAS_SPONSORSHIP !== 'false',
-  ENABLE_MOCK_MODE: process.env.VITE_ENABLE_MOCK_MODE === 'true',
-  ENABLE_EVENT_LISTENING: process.env.VITE_ENABLE_EVENT_LISTENING !== 'false'
+  ENABLE_GAS_SPONSORSHIP: import.meta.env.VITE_ENABLE_GAS_SPONSORSHIP !== 'false',
+  ENABLE_MOCK_MODE: import.meta.env.VITE_ENABLE_MOCK_MODE === 'true',
+  ENABLE_EVENT_LISTENING: import.meta.env.VITE_ENABLE_EVENT_LISTENING !== 'false'
 };
 

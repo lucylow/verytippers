@@ -46,9 +46,9 @@ export const CONTRACTS = {
 
 // Environment flags
 export const FEATURES = {
-  ENABLE_GAS_SPONSORSHIP: process.env.VITE_ENABLE_GAS_SPONSORSHIP !== "false",
-  ENABLE_MOCK_MODE: process.env.VITE_ENABLE_MOCK_MODE === "true",
-  ENABLE_EVENT_LISTENING: process.env.VITE_ENABLE_EVENT_LISTENING !== "false"
+  ENABLE_GAS_SPONSORSHIP: import.meta.env.VITE_ENABLE_GAS_SPONSORSHIP !== "false",
+  ENABLE_MOCK_MODE: import.meta.env.VITE_ENABLE_MOCK_MODE === "true",
+  ENABLE_EVENT_LISTENING: import.meta.env.VITE_ENABLE_EVENT_LISTENING !== "false"
 };
 
 

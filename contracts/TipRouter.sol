@@ -1,23 +1,33 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "./VeryReputation.sol";
 
 /**
  * @title TipRouter - Gasless micro-tipping for VERY Chain
  * @dev Production-ready smart contract for VeryTippers hackathon
- * Features: KMS-signed meta-transactions, replay protection, IPFS privacy
+ * Features: KMS-signed meta-transactions, replay protection, IPFS privacy, VERY token transfers
  * Chain: VERY Chain Mainnet (ID: 8888)
  */
 contract TipRouter is ReentrancyGuard, Ownable {
     using ECDSA for bytes32;
+    using SafeERC20 for IERC20;
 
     // ========== STATE ==========
     
     /// @notice Relayer KMS signer address (AWS KMS, Vault, etc.)
     address public immutable relayerSigner;
+    
+    /// @notice VERY token contract
+    IERC20 public immutable VERY;
+    
+    /// @notice VeryReputation contract (optional)
+    VeryReputation public reputation;
     
     /// @notice Replay protection: message hash → used status
     mapping(bytes32 => bool) public nonceUsed;
@@ -26,7 +36,7 @@ contract TipRouter is ReentrancyGuard, Ownable {
     uint256 public totalTips;
     
     /// @notice TipRouter version
-    uint256 public constant VERSION = 1;
+    uint256 public constant VERSION = 2;
     
     // ========== EVENTS ==========
     
@@ -71,12 +81,15 @@ contract TipRouter is ReentrancyGuard, Ownable {
     // ========== CONSTRUCTOR ==========
     
     /**
-     * @dev Deploy TipRouter with relayer KMS address
+     * @dev Deploy TipRouter with relayer KMS address and VERY token
      * @param _relayerSigner KMS-derived relayer address (AWS KMS, etc.)
+     * @param _veryToken VERY token contract address
      */
-    constructor(address _relayerSigner) {
+    constructor(address _relayerSigner, address _veryToken) {
         if (_relayerSigner == address(0)) revert InvalidAddresses();
+        if (_veryToken == address(0)) revert InvalidAddresses();
         relayerSigner = _relayerSigner;
+        VERY = IERC20(_veryToken);
     }
     
     // ========== CORE FUNCTIONALITY ==========

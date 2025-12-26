@@ -38,7 +38,7 @@ const data = {
   }
 };
 
-const outputPath = path.join(__dirname, '../public/mock.json');
+const outputPath = path.join(__dirname, '../client/public/mock.json');
 fs.writeFileSync(outputPath, JSON.stringify(data, null, 2));
 console.log('✅ Seeded public/mock.json');
 

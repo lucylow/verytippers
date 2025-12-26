@@ -1,36 +1,149 @@
-# VeryTippers - AI-Powered Social Micro-Tipping & Content Monetization Platform
-
 <div align="center">
 
-**An intelligent Web3 tipping platform powered by AI moderation and blockchain technology**
+# 🚀 VeryTippers
+
+**AI-Powered Social Micro-Tipping & Content Monetization Platform**
+
+*An intelligent Web3 tipping platform powered by AI moderation and blockchain technology*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Built for VERY Hackathon 2025](https://img.shields.io/badge/Built%20for-VERY%20Hackathon%202025-blue)](https://developers.verylabs.io/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue)](https://www.typescriptlang.org/)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.19-orange)](https://soliditylang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18+-green)](https://nodejs.org/)
+[![React](https://img.shields.io/badge/React-19.2.1-blue)](https://react.dev/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-12+-blue)](https://www.postgresql.org/)
+[![Redis](https://img.shields.io/badge/Redis-6+-red)](https://redis.io/)
+
+[Quick Start](#-quick-start) • [Documentation](#-documentation) • [API Reference](#-api-documentation) • [Contributing](#-contributing)
 
 </div>
 
 ---
 
+## 📖 What is VeryTippers?
+
+VeryTippers is a **production-grade, decentralized micro-tipping platform** built for the VERY Network. It enables creators and users to send and receive tips seamlessly with:
+
+- 🤖 **AI-Powered Moderation** - Real-time content filtering using BERT-based toxicity detection
+- ⛽ **Gasless Transactions** - Meta-transactions powered by EIP-712 signatures
+- 🔒 **Privacy-First** - End-to-end encrypted messages stored on IPFS
+- 📊 **Rich Analytics** - Comprehensive leaderboards, badges, and gamification
+- 🎯 **Social Integration** - Native Verychat bot integration for seamless tipping
+- 💰 **Monetization** - adsVERY integration for privacy-preserving ad revenue
+
+### 🏆 Hackathon Achievement
+
+**Finalist** in the VERY Hackathon 2025 (Extended) with a **$73,000 USD prize pool** 🎉
+
+---
+
+## ✨ Key Features
+
+### Core Functionality
+- ✅ **Gasless Meta-Transactions** - Users can tip without holding native tokens
+- ✅ **AI Content Moderation** - Real-time toxic content detection (BERT-based)
+- ✅ **IPFS Message Storage** - Decentralized, encrypted message storage
+- ✅ **Smart Contract Integration** - Deployed on VERY Chain with full event tracking
+- ✅ **Queue-Based Processing** - Async job processing with BullMQ and Redis
+- ✅ **Real-Time Updates** - WebSocket support for live tip notifications
+
+### Advanced Features
+- 🎖️ **Badge System** - On-chain and off-chain badges for achievements
+- 📈 **Leaderboards** - Daily, weekly, monthly, and all-time rankings
+- 🔐 **Security First** - Multi-layer security with replay protection and reentrancy guards
+- 📱 **Mobile Ready** - Responsive design with mobile-first approach
+- 🎨 **Modern UI** - Built with Radix UI and Tailwind CSS
+- 🔄 **Event-Driven** - Real-time blockchain event listeners
+
+---
+
 ## 📋 Table of Contents
 
-1. [Executive Summary](#-executive-summary)
-2. [System Architecture](#-system-architecture)
-3. [Meta-Transaction Architecture](#-meta-transaction-architecture)
-4. [AI Moderation System](#-ai-moderation-system)
-5. [Smart Contract Architecture](#-smart-contract-architecture)
-6. [Database Architecture](#-database-architecture)
-7. [Queue Processing System](#-queue-processing-system)
-8. [Security Architecture](#-security-architecture)
-9. [API Documentation](#-api-documentation)
-10. [Performance Optimization](#-performance-optimization)
-11. [Deployment Architecture](#-deployment-architecture)
-12. [Monitoring & Observability](#-monitoring--observability)
-13. [Testing Strategy](#-testing-strategy)
-14. [Setup & Installation](#-setup-and-installation)
-15. [Contributing](#-contributing)
+- [Quick Start](#-quick-start)
+- [What is VeryTippers?](#-what-is-verytippers)
+- [Key Features](#-key-features)
+- [System Architecture](#-system-architecture)
+- [Technical Stack](#-technical-stack)
+- [Meta-Transaction Architecture](#-meta-transaction-architecture)
+- [AI Moderation System](#-ai-moderation-system)
+- [Smart Contract Architecture](#-smart-contract-architecture)
+- [Database Architecture](#-database-architecture)
+- [Queue Processing System](#-queue-processing-system)
+- [Security Architecture](#-security-architecture)
+- [API Documentation](#-api-documentation)
+- [Performance Optimization](#-performance-optimization)
+- [Deployment Architecture](#-deployment-architecture)
+- [Monitoring & Observability](#-monitoring--observability)
+- [Testing Strategy](#-testing-strategy)
+- [Setup & Installation](#-setup-and-installation)
+- [Contributing](#-contributing)
+- [Additional Documentation](#-additional-documentation)
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- **Node.js** 18+ and **pnpm** 10+
+- **PostgreSQL** 12+ (or use Docker)
+- **Redis** 6+ (or use Docker)
+- **Hardhat** 3+ for smart contract development
+
+### Installation
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/lucylow/verytippers.git
+cd verytippers
+
+# 2. Install dependencies
+pnpm install
+
+# 3. Set up environment variables
+cp .env.example .env
+# Edit .env with your configuration
+
+# 4. Set up the database
+npx prisma generate
+npx prisma migrate dev
+
+# 5. Start development servers
+pnpm dev              # Start frontend + backend
+pnpm dev:server       # Backend only (port 3001)
+pnpm dev:client       # Frontend only (port 5173)
+```
+
+### Docker Quick Start
+
+```bash
+# Start all services with Docker Compose
+cd backend
+docker-compose up -d
+
+# Services will be available at:
+# - Frontend: http://localhost:5173
+# - Backend API: http://localhost:3001
+# - PostgreSQL: localhost:5432
+# - Redis: localhost:6379
+```
+
+### Deploy Smart Contracts
+
+```bash
+# Compile contracts
+pnpm compile
+
+# Deploy to testnet
+RELAYER_SIGNER=0xYourRelayerAddress \
+pnpm deploy:testnet
+
+# Verify contracts
+npx hardhat verify --network veryTestnet <CONTRACT_ADDRESS> <RELAYER_SIGNER>
+```
+
+For detailed setup instructions, see [Setup & Installation](#-setup-and-installation).
 
 ---
 
@@ -38,28 +151,32 @@
 
 VeryTippers is a production-grade, decentralized micro-tipping platform built for the VERY Network. The system integrates **AI-powered content moderation**, **gasless meta-transactions**, **IPFS-based message storage**, and **comprehensive analytics** to enable secure, scalable, and user-friendly tipping interactions.
 
-### Technical Stack
+---
 
-| Layer | Technology | Version |
-|-------|-----------|---------|
-| **Frontend** | React + TypeScript + Vite | 19.2.1 / 5.6.3 / 7.1.7 |
-| **Backend** | Node.js + Express + TypeScript | 18+ / 4.21.2 / 5.6.3 |
-| **Blockchain** | Solidity + Hardhat + Ethers.js | 0.8.19 / 3.1.0 / 6.13.1 |
-| **Database** | PostgreSQL + Prisma ORM | 12+ / 7.2.0 |
-| **Cache/Queue** | Redis + BullMQ | 6+ / 5.66.2 |
-| **AI/ML** | HuggingFace Inference API | 3.0.0 |
-| **Storage** | IPFS (Pinata/Infura) | 60.0.1 |
-| **Testing** | Hardhat + Vitest | 3.1.0 / 2.1.4 |
+## 💻 Technical Stack
+
+| Layer | Technology | Version | Purpose |
+|-------|-----------|---------|---------|
+| **Frontend** | React + TypeScript + Vite | 19.2.1 / 5.6.3 / 7.1.7 | Modern SPA with hot reload |
+| **Backend** | Node.js + Express + TypeScript | 18+ / 4.21.2 / 5.6.3 | RESTful API server |
+| **Blockchain** | Solidity + Hardhat + Ethers.js | 0.8.19 / 3.1.0 / 6.13.1 | Smart contracts & Web3 |
+| **Database** | PostgreSQL + Prisma ORM | 12+ / 7.2.0 | Relational data storage |
+| **Cache/Queue** | Redis + BullMQ | 6+ / 5.66.2 | Caching & job queues |
+| **AI/ML** | HuggingFace Inference API | 3.0.0 | Content moderation |
+| **Storage** | IPFS (Pinata/Infura) | 60.0.1 | Decentralized file storage |
+| **Testing** | Hardhat + Vitest | 3.1.0 / 2.1.4 | Contract & unit testing |
+| **UI Framework** | Radix UI + Tailwind CSS | Latest | Accessible components |
+| **State Management** | React Context + Hooks | Built-in | Client-side state |
 
 ### Key Technical Features
 
-- **EIP-712 Meta-Transactions**: Gasless transactions with cryptographic signature verification
-- **BERT-based AI Moderation**: Real-time toxic content detection using `unitary/toxic-bert`
-- **Async Job Processing**: BullMQ-based queue system with retry logic and concurrency control
-- **IPFS Message Encryption**: End-to-end encrypted tip messages stored on IPFS
-- **Event-Driven Architecture**: Blockchain event listeners with real-time updates
-- **Horizontal Scalability**: Stateless services with Redis-backed session management
-- **adsVERY Integration**: Privacy-preserving ad serving with AI moderation, impression/click tracking, and on-chain revenue pools
+- 🔐 **EIP-712 Meta-Transactions**: Gasless transactions with cryptographic signature verification
+- 🤖 **BERT-based AI Moderation**: Real-time toxic content detection using `unitary/toxic-bert`
+- ⚡ **Async Job Processing**: BullMQ-based queue system with retry logic and concurrency control
+- 🔒 **IPFS Message Encryption**: End-to-end encrypted tip messages stored on IPFS
+- 📡 **Event-Driven Architecture**: Blockchain event listeners with real-time updates
+- 📈 **Horizontal Scalability**: Stateless services with Redis-backed session management
+- 💰 **adsVERY Integration**: Privacy-preserving ad serving with AI moderation, impression/click tracking, and on-chain revenue pools
 
 ---
 
@@ -2248,15 +2365,18 @@ pnpm test --coverage
 
 ### Prerequisites
 
-| Software | Version | Purpose |
-|----------|---------|---------|
-| Node.js | 18+ | Runtime environment |
-| pnpm | 10+ | Package manager |
-| PostgreSQL | 12+ | Primary database |
-| Redis | 6+ | Cache and queue |
-| Hardhat | 3+ | Smart contract development |
+| Software | Version | Purpose | Installation |
+|----------|---------|---------|-------------|
+| **Node.js** | 18+ | Runtime environment | [Download](https://nodejs.org/) |
+| **pnpm** | 10+ | Package manager | `npm install -g pnpm` |
+| **PostgreSQL** | 12+ | Primary database | [Download](https://www.postgresql.org/download/) or use Docker |
+| **Redis** | 6+ | Cache and queue | [Download](https://redis.io/download) or use Docker |
+| **Hardhat** | 3+ | Smart contract development | Installed via npm |
 
-### Installation Steps
+### Quick Installation
+
+<details>
+<summary><b>📦 Option 1: Standard Installation</b></summary>
 
 1. **Clone the repository**
 
@@ -2303,7 +2423,15 @@ VERYCHAT_API_KEY=your_api_key
 # Server
 PORT=3001
 NODE_ENV=development
+
+# Optional: Monitoring & Analytics
+SENTRY_DSN=your_sentry_dsn
+ANALYTICS_ID=your_analytics_id
 ```
+
+> 💡 **Tip**: Copy `.env.example` to `.env` and fill in your values. Never commit `.env` to version control!
+
+### Database Setup
 
 4. **Set up the database**
 
@@ -2343,37 +2471,150 @@ npm run dev
 7. **Start the application**
 
 ```bash
-# Development mode
+# Development mode (frontend + backend)
 pnpm dev
+
+# Or start separately
+pnpm dev:server    # Backend only (port 3001)
+pnpm dev:client    # Frontend only (port 5173)
 
 # Production mode
 pnpm build
 pnpm start
 ```
 
+</details>
+
+<details>
+<summary><b>🐳 Option 2: Docker Installation</b></summary>
+
+1. **Clone the repository**
+
+```bash
+git clone https://github.com/lucylow/verytippers.git
+cd verytippers/backend
+```
+
+2. **Start services with Docker Compose**
+
+```bash
+docker-compose up -d
+```
+
+This will start:
+- PostgreSQL (port 5432)
+- Redis (port 6379)
+- Backend API (port 3001)
+
+3. **Run database migrations**
+
+```bash
+docker-compose exec api npx prisma migrate deploy
+```
+
+4. **Access services**
+
+- Frontend: `http://localhost:5173` (run `pnpm dev:client` in root)
+- Backend API: `http://localhost:3001`
+- Prisma Studio: `docker-compose exec api npx prisma studio`
+
+</details>
+
 ### Development Scripts
+
+#### 🛠️ Core Commands
 
 ```bash
 # Development
-pnpm dev              # Start dev server with hot reload
+pnpm dev              # Start dev server (frontend + backend) with hot reload
+pnpm dev:server       # Start backend only (port 3001)
+pnpm dev:client       # Start frontend only (port 5173)
 pnpm build            # Build for production
 pnpm start            # Start production server
+pnpm preview          # Preview production build
+```
 
-# Database
+#### 🗄️ Database Commands
+
+```bash
 pnpm db:migrate       # Run database migrations
+pnpm db:migrate:deploy # Deploy migrations (production)
 pnpm db:generate      # Generate Prisma Client
-pnpm db:studio        # Open Prisma Studio
+pnpm db:studio        # Open Prisma Studio (database GUI)
+```
 
-# Testing
-pnpm test             # Run unit tests
-pnpm test:contracts    # Run smart contract tests
-pnpm test:e2e         # Run end-to-end tests
-pnpm test:coverage    # Run tests with coverage
+#### 🧪 Testing Commands
 
-# Smart Contracts
-pnpm compile           # Compile Solidity contracts
-pnpm deploy:testnet    # Deploy to testnet
-pnpm deploy:mainnet    # Deploy to mainnet
+```bash
+pnpm test             # Run all tests
+pnpm test:contracts   # Run smart contract tests (Hardhat)
+pnpm test:backend     # Run backend tests
+pnpm test:all         # Run all test suites
+```
+
+#### 📜 Smart Contract Commands
+
+```bash
+pnpm compile          # Compile Solidity contracts
+pnpm deploy:local     # Deploy to local Hardhat network
+pnpm deploy:testnet   # Deploy to VERY testnet
+pnpm deploy:mainnet   # Deploy to VERY mainnet
+```
+
+#### 🔄 Queue & Workers
+
+```bash
+pnpm queue:workers    # Start BullMQ workers for tip processing
+pnpm event:listener   # Start blockchain event listener
+```
+
+### Project Structure
+
+```
+verytippers/
+├── client/              # React frontend application
+│   ├── src/
+│   │   ├── components/  # React components
+│   │   ├── pages/       # Page components
+│   │   ├── hooks/       # Custom React hooks
+│   │   ├── lib/         # Utilities and helpers
+│   │   └── contexts/    # React contexts (Theme, Wallet, Network)
+│   └── public/          # Static assets
+│
+├── backend/             # Node.js backend API
+│   ├── src/
+│   │   ├── api/        # API route handlers
+│   │   ├── services/   # Business logic services
+│   │   ├── models/     # Data models
+│   │   ├── repositories/ # Data access layer
+│   │   ├── middleware/ # Express middleware
+│   │   └── queues/     # BullMQ queue processors
+│   └── migrations/     # Database migrations
+│
+├── contracts/          # Solidity smart contracts
+│   ├── TipRouter.sol   # Main tipping contract
+│   ├── TipRouterFair.sol # Fair tipping contract
+│   ├── BadgeFactory.sol # Badge creation contract
+│   └── abis/           # Contract ABIs
+│
+├── relayer/            # Meta-transaction relayer service
+│   └── src/
+│       ├── index.ts    # Relayer server
+│       └── fairness-check.ts # Fairness verification
+│
+├── server/             # Additional server services
+│   ├── routes/         # API routes
+│   ├── services/       # Service layer
+│   └── queues/         # Queue workers
+│
+├── docs/               # Documentation
+│   ├── ADS_INTEGRATION.md
+│   ├── APIS_AND_DATASETS.md
+│   └── audit/          # Security audit docs
+│
+├── scripts/            # Deployment and utility scripts
+├── test/               # Smart contract tests
+└── prisma/             # Prisma schema and migrations
 ```
 
 ---
@@ -2447,27 +2688,71 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 📚 Additional Documentation
 
-- **[Ads Integration Guide](./docs/ADS_INTEGRATION.md)** - Complete guide for adsVERY integration, including API endpoints, frontend components, and smart contract usage
-- **[APIs & Datasets Guide](./docs/APIS_AND_DATASETS.md)** - Comprehensive guide for using free APIs, IPFS pinning (Pinata), Hugging Face datasets, and mock data utilities
-- **[Quick Start: APIs](./docs/QUICK_START_APIS.md)** - Quick reference for setting up Pinata IPFS and Hugging Face API
-- **[Security Audit](./docs/audit/)** - Comprehensive security audit documentation
-- **[Implementation Summary](./IMPLEMENTATION_SUMMARY.md)** - Technical implementation details
+### Integration Guides
+
+- 📘 **[Ads Integration Guide](./docs/ADS_INTEGRATION.md)**  
+  Complete guide for adsVERY integration, including API endpoints, frontend components, and smart contract usage
+
+- 📗 **[APIs & Datasets Guide](./docs/APIS_AND_DATASETS.md)**  
+  Comprehensive guide for using free APIs, IPFS pinning (Pinata), Hugging Face datasets, and mock data utilities
+
+- 📙 **[Quick Start: APIs](./docs/QUICK_START_APIS.md)**  
+  Quick reference for setting up Pinata IPFS and Hugging Face API
+
+### Technical Documentation
+
+- 🔒 **[Security Audit](./docs/audit/)**  
+  Comprehensive security audit documentation and best practices
+
+- 📊 **[Implementation Summary](./IMPLEMENTATION_SUMMARY.md)**  
+  Technical implementation details and architecture decisions
+
+- 🚀 **[Production Deployment](./docs/PRODUCTION_DEPLOYMENT.md)**  
+  Production deployment guide with Docker, Kubernetes, and cloud providers
+
+- 🔧 **[Environment Setup](./docs/ENV_SETUP.md)**  
+  Detailed environment variable configuration guide
+
+### Other Resources
+
+- 📝 **[Changelog](./docs/CHANGELOG_APIS_DATASETS.md)** - API and dataset changes
+- 🎨 **[Landing Page README](./docs/LANDING_PAGE_README.md)** - Frontend documentation
+- 💰 **[Monetization Setup](./docs/MONETIZATION_SETUP.md)** - Revenue generation guide
 
 ---
 
-## 📞 Support & Links
+## 📞 Support & Community
 
-- **Documentation**: [VERY Developers](https://developers.verylabs.io/)
-- **GitHub**: [VeryTippers Repository](https://github.com/lucylow/verytippers)
-- **Community**: [VERY Telegram](https://t.me/verylabs)
-- **AI Model Card**: [toxic-bert on HuggingFace](https://huggingface.co/unitary/toxic-bert)
+### Official Resources
+
+- 📖 **VERY Network Docs**: [developers.verylabs.io](https://developers.verylabs.io/)
+- 💬 **VERY Community**: [Telegram](https://t.me/verylabs)
+- 🐙 **GitHub Repository**: [github.com/lucylow/verytippers](https://github.com/lucylow/verytippers)
+- 🤖 **AI Model**: [toxic-bert on HuggingFace](https://huggingface.co/unitary/toxic-bert)
+
+### Getting Help
+
+- 🐛 **Found a bug?** [Open an issue](https://github.com/lucylow/verytippers/issues)
+- 💡 **Have a feature request?** [Create a discussion](https://github.com/lucylow/verytippers/discussions)
+- 🤝 **Want to contribute?** See [Contributing Guide](#-contributing)
 
 ---
 
 <div align="center">
 
-**VeryTippers** - Revolutionizing content monetization with AI and blockchain 🚀
+## 🎉 VeryTippers
+
+**Revolutionizing content monetization with AI and blockchain**
+
+[![Star on GitHub](https://img.shields.io/github/stars/lucylow/verytippers?style=social)](https://github.com/lucylow/verytippers)
+[![Fork on GitHub](https://img.shields.io/github/forks/lucylow/verytippers?style=social)](https://github.com/lucylow/verytippers/fork)
 
 *Built with ❤️ by SocialFi Labs*
+
+**Finalist** in VERY Hackathon 2025 (Extended) 🏆
+
+---
+
+Made with [React](https://react.dev/) • [TypeScript](https://www.typescriptlang.org/) • [Solidity](https://soliditylang.org/) • [VERY Network](https://verylabs.io/)
 
 </div>
