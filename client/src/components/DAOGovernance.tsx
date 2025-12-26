@@ -366,6 +366,50 @@ export const DAOGovernance: React.FC = () => {
             </div>
           </CardContent>
         </Card>
+          </TabsContent>
+
+          <TabsContent value="proposals" className="mt-6">
+            {selectedProposalId ? (
+              <ProposalDetail
+                proposalId={selectedProposalId}
+                daoService={daoService!}
+                onBack={() => setSelectedProposalId(null)}
+                currentBlock={currentBlock}
+                votingPower={power || undefined}
+              />
+            ) : showCreateProposal ? (
+              <ProposalCreator
+                daoService={daoService!}
+                votingPower={power || undefined}
+                proposalThreshold={proposalThreshold || undefined}
+                onProposalCreated={handleProposalCreated}
+                onCancel={() => setShowCreateProposal(false)}
+              />
+            ) : (
+              <ProposalBrowser
+                daoService={daoService!}
+                onCreateProposal={() => setShowCreateProposal(true)}
+                onViewProposal={handleViewProposal}
+                currentBlock={currentBlock}
+              />
+            )}
+          </TabsContent>
+
+          <TabsContent value="activity" className="mt-6">
+            <DAOActivityFeed
+              daoService={daoService!}
+              address={address || undefined}
+              limit={20}
+            />
+          </TabsContent>
+
+          <TabsContent value="leaderboard" className="mt-6">
+            <CommunityLeaderboard
+              daoService={daoService!}
+              limit={50}
+            />
+          </TabsContent>
+        </Tabs>
       </Card>
     </div>
   );

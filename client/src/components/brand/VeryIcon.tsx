@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useId } from "react";
 
 interface VeryIconProps {
   size?: number;
@@ -9,7 +9,7 @@ export const VeryIcon: React.FC<VeryIconProps> = ({
   size = 40, 
   className = "" 
 }) => {
-  const gradientId = `veryIconGradient-${Math.random().toString(36).substr(2, 9)}`;
+  const gradientId = useId();
   
   return (
     <svg
