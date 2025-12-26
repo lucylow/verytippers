@@ -17,6 +17,7 @@ import { PersonalizedInsights } from '@/components/PersonalizedInsights';
 import { useVeryTippers } from '@/hooks/useVeryTippers';
 import { cn } from '@/lib/utils';
 import AdSlot from '@/components/AdSlot';
+import { VeryIcon } from '@/components/brand';
 
 interface Message {
   id: string;
@@ -141,9 +142,12 @@ export default function Chat({ me, onRequestTip }: ChatProps) {
         animate={{ opacity: 1, y: 0 }}
         className="text-center space-y-4"
       >
-        <h1 className="text-5xl font-black bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent drop-shadow-2xl">
-          VeryTippers Chat
-        </h1>
+        <div className="flex items-center justify-center gap-4">
+          <VeryIcon size={48} />
+          <h1 className="text-5xl font-black bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent drop-shadow-2xl">
+            VeryTippers Chat
+          </h1>
+        </div>
         <p className="text-xl text-slate-400 max-w-2xl mx-auto">
           Gasless tipping with AI suggestions, voice commands, NFT badges, and DAO governance
         </p>

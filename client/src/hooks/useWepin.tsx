@@ -158,8 +158,9 @@ export function useWepin(options?: UseWepinOptions) {
         );
       }
 
-      // Initialize if not already initialized
-      if (!wallet) {
+      // Check if wallet is initialized, if not initialize it
+      const currentStatus = await wallet.getStatus().catch(() => 'not_initialized');
+      if (currentStatus === 'not_initialized') {
         await wallet.initialize({
           appId,
           appKey,

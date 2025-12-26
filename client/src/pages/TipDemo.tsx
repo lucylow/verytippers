@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import Chat from '@/components/Chat'
 import TipModal from '@/components/TipModal'
 import Leaderboard from '@/components/Leaderboard'
+import { SocialActivityPanel } from '@/components/SocialActivityPanel'
 import { TipPayload } from '@/types/tip'
 import { toast } from 'sonner'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -54,13 +55,17 @@ export default function TipDemo() {
             <Leaderboard />
           </div>
 
-          {/* Right Column: Activity Feed */}
+          {/* Right Column: Social Activity & System Status */}
           <div className="space-y-6">
+            {/* Social Activity Panel */}
+            <SocialActivityPanel limit={8} autoRefresh={true} refreshInterval={30000} />
+
+            {/* System Status */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Activity className="h-5 w-5" />
-                  Activity Feed
+                  System Status
                 </CardTitle>
                 <CardDescription>
                   Live transaction feed and system status
@@ -84,7 +89,7 @@ export default function TipDemo() {
 
                 {recentTxs.length > 0 && (
                   <div className="pt-4 border-t">
-                    <h4 className="text-sm font-semibold mb-3">Recent Transactions</h4>
+                    <h4 className="text-sm font-semibold mb-3">Your Recent Transactions</h4>
                     <div className="space-y-2">
                       {recentTxs.map((tx, idx) => (
                         <div 

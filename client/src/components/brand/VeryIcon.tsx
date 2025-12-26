@@ -9,6 +9,8 @@ export const VeryIcon: React.FC<VeryIconProps> = ({
   size = 40, 
   className = "" 
 }) => {
+  const gradientId = `veryIconGradient-${Math.random().toString(36).substr(2, 9)}`;
+  
   return (
     <svg
       width={size}
@@ -19,7 +21,7 @@ export const VeryIcon: React.FC<VeryIconProps> = ({
       className={className}
     >
       <defs>
-        <linearGradient id="veryIconGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+        <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stopColor="#EC4899" stopOpacity="1" />
           <stop offset="100%" stopColor="#8B5CF6" stopOpacity="1" />
         </linearGradient>
@@ -28,7 +30,7 @@ export const VeryIcon: React.FC<VeryIconProps> = ({
       {/* Speech bubble shape */}
       <path
         d="M8 4C5.79086 4 4 5.79086 4 8V24C4 26.2091 5.79086 28 8 28H16L20 32L24 28H32C34.2091 28 36 26.2091 36 24V8C36 5.79086 34.2091 4 32 4H8Z"
-        fill="url(#veryIconGradient)"
+        fill={`url(#${gradientId})`}
       />
       
       {/* White V letter */}
@@ -40,7 +42,7 @@ export const VeryIcon: React.FC<VeryIconProps> = ({
       {/* Speech bubble tail */}
       <path
         d="M16 28L20 32L24 28H16Z"
-        fill="url(#veryIconGradient)"
+        fill={`url(#${gradientId})`}
       />
     </svg>
   );

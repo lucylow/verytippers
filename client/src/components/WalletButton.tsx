@@ -28,6 +28,7 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { shareProfile, copyAddress as copyAddr } from '@/lib/social/share';
 
 interface WalletButtonProps {
   className?: string;
@@ -178,34 +179,32 @@ export const WalletButton: React.FC<WalletButtonProps> = ({ className }) => {
     }
   }, [disconnectWallet]);
 
-  const handleCopyAddress = useCallback(() => {
+  const handleCopyAddress = useCallback(async () => {
     if (address) {
-      navigator.clipboard.writeText(address);
-      toast.success('Address copied to clipboard!');
+      try {
+        await copyAddr(address);
+        toast.success('Address copied to clipboard!');
+      } catch (error) {
+        toast.error('Failed to copy address');
+      }
     }
   }, [address]);
 
-  const handleShareProfile = useCallback(() => {
+  const handleShareProfile = useCallback(async () => {
     if (!address) return;
     
-    const profileUrl = `${window.location.origin}/profile/${address}`;
-    const shareText = `Check out my VeryTippers profile! ${address.slice(0, 6)}...${address.slice(-4)}`;
-    
-    if (navigator.share) {
-      navigator.share({
-        title: 'My VeryTippers Profile',
-        text: shareText,
-        url: profileUrl,
-      }).catch(() => {
-        // Fallback to clipboard
-        navigator.clipboard.writeText(profileUrl);
-        toast.success('Profile link copied!');
-      });
-    } else {
-      navigator.clipboard.writeText(profileUrl);
-      toast.success('Profile link copied!');
+    try {
+      const usedClipboard = await shareProfile(address, userStats || undefined);
+      if (usedClipboard) {
+        toast.success('Profile shared!');
+      } else {
+        toast.success('Profile link copied to clipboard!');
+      }
+    } catch (error) {
+      console.error('Failed to share profile:', error);
+      toast.error('Failed to share profile');
     }
-  }, [address]);
+  }, [address, userStats]);
 
   const handleViewProfile = useCallback(() => {
     if (address) {

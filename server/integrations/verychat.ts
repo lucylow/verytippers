@@ -36,7 +36,10 @@ export class VeryChatIntegration {
         this.orchestrator = new OrchestratorService();
         this.tipService = new TipService();
         this.verychatService = new VerychatService();
-        this.socialService = new SocialService();
+        // Initialize SocialService with database instance
+        const { DatabaseService } = require('../services/DatabaseService');
+        const db = DatabaseService.getInstance();
+        this.socialService = new SocialService(db);
     }
 
     /**

@@ -18,6 +18,7 @@ import { ModerationService } from './services/moderation.service';
 import { BlockchainService } from './services/blockchain.service';
 import { LeaderboardService } from './services/leaderboard.service';
 import { AIInsightsService } from './services/ai-insights.service';
+import { VerychatApiService } from './services/verychat/VerychatApi.service';
 
 // Workers
 import { TipProcessorWorker } from './workers/tip-processor.worker';
@@ -48,6 +49,7 @@ class VeryTippersBackend {
   private blockchainService: BlockchainService;
   private tipProcessor: TipProcessorWorker;
   private wsManager: WebSocketManager;
+  private verychatApi: VerychatApiService;
   private startTime: number;
 
   constructor() {
@@ -80,6 +82,7 @@ class VeryTippersBackend {
     this.blockchainService = new BlockchainService();
     this.tipProcessor = new TipProcessorWorker(this.redis, this.pgPool);
     this.wsManager = new WebSocketManager(this.fastify);
+    this.verychatApi = new VerychatApiService(this.redis);
   }
 
   /**
@@ -152,8 +155,13 @@ class VeryTippersBackend {
           sendTip: 'POST /api/tips/send',
           leaderboard: 'GET /api/leaderboard/:period?',
           userStats: 'GET /api/users/:userId/stats',
+          verychatStatus: 'GET /api/verychat/status',
           graphql: '/graphql',
           websocket: '/ws'
+        },
+        resources: {
+          developersPortal: 'https://developers.verylabs.io/',
+          veryChainDocs: 'https://wp.verylabs.io/verychain'
         }
       };
     });
@@ -294,6 +302,27 @@ class VeryTippersBackend {
       } catch (error: any) {
         logger.error('Get queue stats failed', { error });
         throw error;
+      }
+    });
+
+    // VeryChat API status endpoint
+    this.fastify.get('/api/verychat/status', async () => {
+      try {
+        const status = await this.verychatApi.checkApiStatus();
+        return {
+          ...status,
+          lastCheck: status.lastCheck?.toISOString(),
+          developersPortal: 'https://developers.verylabs.io/',
+          configuration: this.verychatApi.validateConfiguration()
+        };
+      } catch (error: any) {
+        logger.error('Get VeryChat API status failed', { error });
+        return {
+          isConfigured: false,
+          isHealthy: false,
+          error: error.message || 'Failed to check API status',
+          developersPortal: 'https://developers.verylabs.io/'
+        };
       }
     });
   }

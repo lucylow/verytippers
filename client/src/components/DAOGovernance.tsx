@@ -3,20 +3,31 @@ import { useState, useEffect } from 'react';
 import { useVeryTippers } from '@/hooks/useVeryTippers';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { DAOService, VoterPower, DAOStats } from '@/services/dao';
-import { Loader2, TrendingUp, Users, Coins, Award, Vote, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Loader2, TrendingUp, Users, Coins, Award, Vote, AlertCircle, CheckCircle2, FileText, Activity, Trophy } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ethers } from 'ethers';
+import { ProposalBrowser } from './DAO/ProposalBrowser';
+import { ProposalDetail } from './DAO/ProposalDetail';
+import { ProposalCreator } from './DAO/ProposalCreator';
+import { DAOActivityFeed } from './DAO/DAOActivityFeed';
+import { CommunityLeaderboard } from './DAO/CommunityLeaderboard';
 
 export const DAOGovernance: React.FC = () => {
   const { provider, signer, isConnected, address } = useVeryTippers();
   const [daoService, setDaoService] = useState<DAOService | null>(null);
   const [power, setPower] = useState<VoterPower | null>(null);
   const [stats, setStats] = useState<DAOStats | null>(null);
+  const [proposalThreshold, setProposalThreshold] = useState<bigint | null>(null);
+  const [currentBlock, setCurrentBlock] = useState<number | undefined>();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [memberTips, setMemberTips] = useState<bigint | null>(null);
+  const [activeTab, setActiveTab] = useState<string>('overview');
+  const [selectedProposalId, setSelectedProposalId] = useState<bigint | null>(null);
+  const [showCreateProposal, setShowCreateProposal] = useState(false);
 
   useEffect(() => {
     if (provider && signer && isConnected) {
@@ -41,21 +52,38 @@ export const DAOGovernance: React.FC = () => {
     setError(null);
     
     try {
-      const [powerData, statsData, tipsData] = await Promise.all([
+      const [powerData, statsData, tipsData, threshold, blockNumber] = await Promise.all([
         daoService.getMyPower(),
         daoService.getDAOStats(),
-        daoService.getMemberTipsReceived()
+        daoService.getMemberTipsReceived(),
+        daoService.getProposalThreshold().catch(() => null),
+        provider?.getBlockNumber().catch(() => undefined)
       ]);
       
       setPower(powerData);
       setStats(statsData);
       setMemberTips(tipsData);
+      setProposalThreshold(threshold);
+      setCurrentBlock(blockNumber);
     } catch (err) {
       console.error('Failed to load DAO data:', err);
       setError(err instanceof Error ? err.message : 'Failed to load DAO data');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleProposalCreated = (proposalId: bigint) => {
+    setShowCreateProposal(false);
+    setSelectedProposalId(proposalId);
+    setActiveTab('proposals');
+    loadData();
+    toast.success(`Proposal #${proposalId.toString()} created!`);
+  };
+
+  const handleViewProposal = (proposalId: bigint) => {
+    setSelectedProposalId(proposalId);
+    setActiveTab('proposals');
   };
 
   const formatPower = (value: bigint | null | undefined): string => {

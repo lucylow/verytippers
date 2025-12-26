@@ -324,7 +324,7 @@ export class WepinWallet {
 
   /**
    * Sign a message using personal_sign (EIP-191)
-   * @param message - Message to sign
+   * @param message - Message to sign (will be UTF-8 encoded)
    */
   async signMessage(message: string): Promise<string> {
     if (!this.account) {
@@ -339,13 +339,26 @@ export class WepinWallet {
       const network = this.account.network || 'very';
       const baseProvider = await this.provider.getProvider(network);
       
-      // Convert message to hex
-      const messageHex = '0x' + Buffer.from(message).toString('hex');
+      // personal_sign expects the message as a hex string
+      // Convert UTF-8 string to hex
+      const encoder = new TextEncoder();
+      const messageBytes = encoder.encode(message);
+      const messageHex = '0x' + Array.from(messageBytes)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
       
-      // Sign message using personal_sign
+      // Sign message using personal_sign (EIP-191)
+      // Note: Some providers may accept the message directly as a string
+      // If this fails, try passing the message string directly
       const signature = await baseProvider.request({
         method: 'personal_sign',
         params: [messageHex, this.account.address],
+      }).catch(async () => {
+        // Fallback: try with message as string (some providers handle encoding)
+        return await baseProvider.request({
+          method: 'personal_sign',
+          params: [message, this.account.address],
+        });
       });
 
       return signature as string;

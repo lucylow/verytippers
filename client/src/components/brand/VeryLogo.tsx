@@ -22,6 +22,7 @@ export const VeryLogo: React.FC<VeryLogoProps> = ({
 }) => {
   const { icon: iconSize, text: textSize } = sizeMap[size];
   const shouldShowText = variant === "full" || variant === "text";
+  const gradientId = `veryGradient-${Math.random().toString(36).substr(2, 9)}`;
 
   return (
     <div className={`flex items-center gap-2 ${className}`}>
@@ -36,7 +37,7 @@ export const VeryLogo: React.FC<VeryLogoProps> = ({
         >
           {/* Speech bubble shape with gradient */}
           <defs>
-            <linearGradient id="veryGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
               <stop offset="0%" stopColor="#EC4899" stopOpacity="1" />
               <stop offset="100%" stopColor="#8B5CF6" stopOpacity="1" />
             </linearGradient>
@@ -45,7 +46,7 @@ export const VeryLogo: React.FC<VeryLogoProps> = ({
           {/* Speech bubble background */}
           <path
             d="M8 4C5.79086 4 4 5.79086 4 8V24C4 26.2091 5.79086 28 8 28H16L20 32L24 28H32C34.2091 28 36 26.2091 36 24V8C36 5.79086 34.2091 4 32 4H8Z"
-            fill="url(#veryGradient)"
+            fill={`url(#${gradientId})`}
           />
           
           {/* White V letter */}
@@ -57,7 +58,7 @@ export const VeryLogo: React.FC<VeryLogoProps> = ({
           {/* Small tail for speech bubble */}
           <path
             d="M16 28L20 32L24 28H16Z"
-            fill="url(#veryGradient)"
+            fill={`url(#${gradientId})`}
           />
         </svg>
       )}

@@ -1,283 +1,342 @@
-# $VERY Utility Token Ecosystem
+# $VERY Token Ecosystem - Complete Implementation Guide
 
 ## Overview
 
-$VERY is not just a currency. It is a complete economic system designed for the VeryTippers platform:
+The $VERY utility token ecosystem is a production-grade, end-to-end token system designed for VeryTippers. It's not just a currency—it's a complete economic system that enables:
 
-- **Medium of appreciation** (tips)
-- **Reputation signal** (leaderboards, boosts)
-- **Governance weight** (DAO + proposals)
-- **Gamification fuel** (badges, multipliers)
-- **Anti-spam mechanism** (rate limits, staking)
-- **Programmable incentive layer** (AI + rules)
+- **Medium of Appreciation**: Tips consume VERY, not ETH
+- **Reputation Signal**: Leaderboards, boosts, multipliers
+- **Governance Weight**: DAO voting power
+- **Gamification Fuel**: Badges, multipliers, achievements
+- **Anti-Spam Mechanism**: Stake-based rate limits
+- **Programmable Incentive Layer**: AI suggests, contracts enforce
 
 ## Architecture
 
-### 1. Core ERC-20 Token (`VeryToken.sol`)
+### Core Contracts
 
-**Features:**
-- Gas-optimized ERC-20 implementation
-- Max supply cap: 1 billion VERY tokens
-- Initial treasury: 100M VERY (10% of max supply)
-- Owner-controlled minting (for rewards distribution)
+#### 1. VeryToken.sol
+- **Purpose**: Core ERC-20 token with max supply cap
+- **Features**:
+  - Max supply: 1 billion VERY tokens
+  - Treasury-controlled minting
+  - Gas-optimized
+  - Auditable
 
-**Key Functions:**
+**Key Functions**:
 ```solidity
-constructor(address treasury)  // Mints 100M to treasury
-mint(address to, uint256 amount)  // Owner-only minting
+function mint(address to, uint256 amount) external onlyOwner
 ```
 
-### 2. Reputation System (`VeryReputation.sol`)
+#### 2. TipRouter.sol (Enhanced)
+- **Purpose**: Gasless tipping with VERY token integration
+- **Features**:
+  - KMS-signed meta-transactions
+  - Replay protection
+  - VERY token transfers
+  - **NEW**: VeryStake integration for anti-spam
+  - **NEW**: VeryReputation integration for reputation tracking
 
-**Purpose:** Track lifetime tipping stats and calculate multipliers
-
-**Features:**
-- Lifetime tips sent/received tracking
-- Reputation-based tip multipliers:
-  - Base: 1.0x (default)
-  - Epic: 1.2x (1,000+ VERY received)
-  - Legendary: 1.5x (10,000+ VERY received)
-- Authorized recorder pattern (only TipRouter can record)
-
-**Key Functions:**
+**Key Functions**:
 ```solidity
-recordTip(address from, address to, uint256 amount)
-tipMultiplier(address user) returns (uint256)  // Basis points
-getReputation(address user) returns (tipped, received, multiplier)
+function submitTip(
+    address from,
+    address to,
+    uint256 amount,
+    bytes32 cidHash,
+    uint256 nonce,
+    uint8 v, bytes32 r, bytes32 s
+) external
 ```
 
-### 3. Staking System (`VeryStake.sol`)
+**Anti-Spam Integration**:
+- Checks if user has sufficient stake before allowing tip
+- Records tip block for rate limiting
+- Prevents sybil attacks economically
 
-**Purpose:** Anti-spam mechanism via economic friction
+#### 3. VeryReputation.sol
+- **Purpose**: On-chain reputation and gamification
+- **Features**:
+  - Lifetime tips sent/received tracking
+  - Reputation-based multipliers
+  - Leaderboard data source
 
-**Features:**
-- Minimum stake requirement (default: 100 VERY)
-- Users must stake to unlock tipping capacity
-- Prevents sybil attacks
-- DAO-tunable parameters
+**Multiplier Tiers**:
+- **Base**: 1.0x (default)
+- **Epic**: 1.2x (1,000+ VERY received)
+- **Legendary**: 1.5x (10,000+ VERY received)
 
-**Key Functions:**
+**Key Functions**:
 ```solidity
-stake(uint256 amount)
-unstake(uint256 amount)
-canTip(address user) returns (bool)
-getStakeInfo(address user) returns (stakedAmount, canTip)
+function getReputation(address user) external view returns (
+    uint256 tipped,
+    uint256 received,
+    uint256 multiplier
+)
+function tipMultiplier(address user) external view returns (uint256)
 ```
 
-### 4. Governance System (`VeryGovernor.sol`)
+#### 4. VeryStake.sol
+- **Purpose**: Anti-spam staking mechanism
+- **Features**:
+  - Minimum stake requirement (default: 100 VERY)
+  - Economic friction to prevent sybil attacks
+  - DAO-tunable parameters
+  - Rate limiting support
 
-**Purpose:** Token-weighted voting with contribution rewards
-
-**Voting Power Formula:**
-```
-VotingPower = VERY_balance + (lifetime_received × 100) + NFT_multiplier
-```
-
-This rewards contribution (tips received) over pure whale dominance.
-
-**Key Functions:**
+**Key Functions**:
 ```solidity
-votingPower(address user) returns (uint256)
-getVotingPowerBreakdown(address user) returns (tokenPower, repPower, nftPower, totalPower)
+function stake(uint256 amount) external
+function unstake(uint256 amount) external
+function canTip(address user) external view returns (bool)
+function getStakeInfo(address user) external view returns (
+    uint256 stakedAmount,
+    bool canTipUser
+)
 ```
 
-### 5. Rewards Pool (`VeryRewardsPool.sol`)
+#### 5. VeryGovernor.sol
+- **Purpose**: Token-weighted governance system
+- **Features**:
+  - Voting power calculation
+  - Rewards contribution over whale dominance
+  - NFT multiplier support
 
-**Purpose:** Non-inflationary daily rewards distribution
+**Voting Power Formula**:
+```
+VotingPower = Token Balance + (Lifetime Received × 100) + NFT Multiplier
+```
 
-**Features:**
-- Daily pool: 10,000 VERY (configurable)
-- Distributed to top creators
-- Transparent and predictable emissions
-- DAO-controlled parameters
-
-**Key Functions:**
+**Key Functions**:
 ```solidity
-distribute(address[] calldata topCreators)
-setDailyPool(uint256 newDailyPool)
+function votingPower(address user) external view returns (uint256)
+function getVotingPowerBreakdown(address user) external view returns (
+    uint256 tokenPower,
+    uint256 repPower,
+    uint256 nftPower,
+    uint256 totalPower
+)
 ```
 
-### 6. Enhanced TipRouter (`TipRouter.sol`)
+#### 6. VeryRewards.sol
+- **Purpose**: On-chain reward distribution
+- **Features**:
+  - Signed reward payloads
+  - Replay protection
+  - Gasless UX via relayer
 
-**Updates:**
-- Now actually transfers VERY tokens (not just events)
-- Integrates with VeryReputation for automatic tracking
-- Maintains gasless meta-transaction flow
-- Replay protection via nonces
-
-**Key Changes:**
-```solidity
-constructor(address _relayerSigner, address _veryToken)  // Now requires token
-submitTip(...) {
-    // Transfers tokens
-    VERY.safeTransferFrom(from, to, amount);
-    // Records reputation
-    if (address(reputation) != address(0)) {
-        reputation.recordTip(from, to, amount);
-    }
-}
-```
+#### 7. VeryRewardsPool.sol
+- **Purpose**: Daily rewards distribution
+- **Features**:
+  - Non-inflationary rewards
+  - Predictable emissions (default: 10,000 VERY/day)
+  - DAO-controlled
 
 ## Frontend Integration
 
 ### Hooks
 
-1. **`useVeryToken`** - Token balance, transfers, approvals
-2. **`useVeryReputation`** - Reputation stats and multipliers
-3. **`useVeryStake`** - Staking operations and status
-4. **`useVeryGovernor`** - Voting power calculations
+#### useVeryReputation
+```typescript
+const { reputation, refreshReputation, getReputationFor } = useVeryReputation();
+```
+
+**Returns**:
+- `reputation`: ReputationData with tipped, received, multiplier
+- `refreshReputation()`: Refresh current user's reputation
+- `getReputationFor(address)`: Get reputation for any address
+
+#### useVeryStake
+```typescript
+const { stakeData, stake, unstake, refreshStake } = useVeryStake();
+```
+
+**Returns**:
+- `stakeData`: StakeData with staked amount, canTip status, progress
+- `stake(amount)`: Stake VERY tokens
+- `unstake(amount)`: Unstake VERY tokens
+- `refreshStake()`: Refresh stake data
+
+#### useVeryGovernor
+```typescript
+const { votingPower, refreshVotingPower, getVotingPowerFor } = useVeryGovernor();
+```
+
+**Returns**:
+- `votingPower`: VotingPowerData with breakdown
+- `refreshVotingPower()`: Refresh voting power
+- `getVotingPowerFor(address)`: Get voting power for any address
 
 ### Components
 
-**`VeryEcosystem.tsx`** - Complete dashboard showing:
-- Token balance
-- Reputation multiplier
-- Staking status
-- Voting power
-- Detailed breakdowns for each system
+#### VeryEcosystem Component
+Complete token ecosystem dashboard with:
+- Token balance display
+- Reputation stats and multipliers
+- Staking interface
+- Governance power breakdown
+- Tabbed interface for detailed views
 
-## Deployment Checklist
+**Location**: `/client/src/components/VeryEcosystem.tsx`
 
-1. **Deploy VeryToken**
-   ```bash
-   # Deploy with treasury address
-   VeryToken treasury = 0x...
-   ```
+#### TokenEcosystem Page
+Full page with:
+- Feature overview cards
+- Token utility explanation
+- VeryEcosystem component integration
 
-2. **Deploy VeryReputation**
-   ```bash
-   VeryReputation reputation = new VeryReputation();
-   ```
+**Route**: `/tokens`
 
-3. **Deploy VeryStake**
-   ```bash
-   VeryStake stake = new VeryStake(veryTokenAddress, 100 ether);
-   ```
+## Contract Deployment
 
-4. **Deploy VeryGovernor**
-   ```bash
-   VeryGovernor governor = new VeryGovernor(veryTokenAddress, reputationAddress);
-   ```
+### Deployment Order
 
-5. **Deploy VeryRewardsPool**
-   ```bash
-   VeryRewardsPool rewards = new VeryRewardsPool(veryTokenAddress, 10_000 ether);
-   ```
+1. **VeryToken**: Deploy first (needed by all other contracts)
+2. **VeryReputation**: Deploy second (needed by TipRouter and VeryGovernor)
+3. **VeryStake**: Deploy third (needed by TipRouter)
+4. **TipRouter**: Deploy with VeryToken, VeryReputation, and VeryStake addresses
+5. **VeryGovernor**: Deploy with VeryToken and VeryReputation addresses
+6. **VeryRewards**: Deploy with VeryToken address
+7. **VeryRewardsPool**: Deploy with VeryToken address
 
-6. **Deploy/Update TipRouter**
-   ```bash
-   TipRouter router = new TipRouter(relayerSigner, veryTokenAddress);
-   router.setReputation(reputationAddress);
-   ```
+### Configuration
 
-7. **Configure Contracts**
-   ```bash
-   # Authorize TipRouter in VeryReputation
+After deployment, configure contracts:
+
+1. **VeryReputation**: Authorize TipRouter as recorder
+   ```solidity
    reputation.setRecorder(tipRouterAddress, true);
-   
-   # Grant MINTER_ROLE to rewards pool (if using AccessControl version)
-   # Or use owner minting in new version
+   ```
+
+2. **VeryStake**: Authorize TipRouter as recorder
+   ```solidity
+   stake.setRecorder(tipRouterAddress, true);
+   ```
+
+3. **TipRouter**: Set reputation and stake contracts
+   ```solidity
+   tipRouter.setReputation(reputationAddress);
+   tipRouter.setStakeContract(stakeAddress);
    ```
 
 ## Environment Variables
 
 Add to `.env`:
-```env
+
+```bash
+# Contract Addresses
 VITE_VERY_TOKEN_ADDRESS=0x...
 VITE_REPUTATION_CONTRACT_ADDRESS=0x...
 VITE_STAKE_CONTRACT_ADDRESS=0x...
 VITE_GOVERNOR_CONTRACT_ADDRESS=0x...
-VITE_REWARDS_POOL_ADDRESS=0x...
 VITE_TIP_CONTRACT_ADDRESS=0x...
+VITE_VERY_REWARDS_CONTRACT_ADDRESS=0x...
+VITE_REWARDS_POOL_ADDRESS=0x...
 ```
 
-## Integration Flow
+## Usage Examples
 
-### Tipping Flow
+### Staking Tokens
 
-1. User approves TipRouter to spend VERY tokens
-2. User signs tip payload (gasless)
-3. Relayer submits to TipRouter
-4. TipRouter:
-   - Verifies relayer signature
-   - Checks replay protection
-   - Transfers VERY tokens (from → to)
-   - Records tip in VeryReputation
-   - Emits event for indexer
+```typescript
+const { stake } = useVeryStake();
 
-### Staking Flow
+// Stake 100 VERY tokens
+const result = await stake(100);
+if (result.success) {
+  console.log('Staked successfully!', result.txHash);
+}
+```
 
-1. User approves VeryStake to spend VERY tokens
-2. User calls `stake(amount)`
-3. Tokens locked in contract
-4. User can now tip (if above minimum)
+### Checking Reputation
 
-### Governance Flow
+```typescript
+const { reputation } = useVeryReputation();
 
-1. User's voting power calculated on-demand
-2. Formula: `balance + (received × 100) + NFT_boost`
-3. Used in DAO proposals and voting
+console.log('Lifetime tipped:', reputation.tippedFormatted);
+console.log('Lifetime received:', reputation.receivedFormatted);
+console.log('Multiplier:', reputation.multiplierFormatted);
+```
+
+### Viewing Voting Power
+
+```typescript
+const { votingPower } = useVeryGovernor();
+
+console.log('Total voting power:', votingPower.totalPowerFormatted);
+console.log('Token power:', votingPower.tokenPowerFormatted);
+console.log('Reputation power:', votingPower.repPowerFormatted);
+```
 
 ## Security Considerations
 
-1. **Replay Protection:** Nonce-based in TipRouter
-2. **Access Control:** Owner-only functions protected
-3. **Reentrancy:** ReentrancyGuard on critical functions
-4. **Safe Transfers:** SafeERC20 for all token operations
-5. **Input Validation:** All user inputs validated
+1. **Access Control**: All contracts use OpenZeppelin's Ownable for admin functions
+2. **Replay Protection**: TipRouter uses nonce-based replay protection
+3. **Stake Verification**: TipRouter verifies stake before processing tips
+4. **Signature Verification**: All meta-transactions use EIP-191 signatures
+5. **Reentrancy Protection**: TipRouter uses ReentrancyGuard
 
 ## Economic Model
 
 ### Token Distribution
-- Initial Treasury: 100M VERY (10%)
-- Daily Rewards: 10,000 VERY/day
-- Max Supply: 1B VERY (hard cap)
+- **Max Supply**: 1,000,000,000 VERY
+- **Initial Treasury**: 100,000,000 VERY (10%)
+- **Daily Rewards Pool**: 10,000 VERY/day (configurable)
+- **Remaining**: DAO-controlled minting
 
-### Multiplier Tiers
-- Base: 1.0x (default)
-- Epic: 1.2x (1,000 VERY received)
-- Legendary: 1.5x (10,000 VERY received)
+### Multiplier System
+- Rewards active contributors
+- Prevents gaming through high thresholds
+- Transparent on-chain calculation
 
-### Staking Requirements
-- Minimum: 100 VERY to tip
-- No maximum (unlimited daily cap increase)
-
-### Governance Weight
-- 1 VERY balance = 1 voting power
-- 1 VERY received = 100 voting power
-- 1 NFT = 1,000 voting power (configurable)
+### Governance Model
+- Rewards contribution (tips received) over whale dominance
+- Formula: `Token Balance + (Received × 100) + NFT Boost`
+- Sybil-resistant through reputation requirements
 
 ## Future Enhancements
 
-- [ ] EIP-712 typed signatures
-- [ ] ZK-proof-friendly reputation
-- [ ] NFT badge minting integration
-- [ ] On-chain receipts
-- [ ] Token velocity analytics
-- [ ] Quadratic voting
-- [ ] Time-locked staking (vesting)
-- [ ] Multi-signature governance
+### Optional Power-Ups
+
+1. **EIP-712 Typed Signatures**: Better UX for meta-transactions
+2. **ZK-Proof Reputation**: Privacy-preserving reputation
+3. **NFT Badge Minting**: On-chain achievement badges
+4. **On-Chain Receipts**: Immutable tip history
+5. **Token Velocity Analytics**: Economic metrics
+6. **Quadratic Voting**: More democratic governance
 
 ## Testing
 
-Run tests:
-```bash
-npx hardhat test test/VeryToken.test.ts
-npx hardhat test test/VeryReputation.test.ts
-npx hardhat test test/VeryStake.test.ts
-npx hardhat test test/VeryGovernor.test.ts
-```
+### Unit Tests
+- Test all contract functions
+- Test access control
+- Test edge cases (zero amounts, invalid addresses)
 
-## Summary
+### Integration Tests
+- Test TipRouter with VeryStake integration
+- Test reputation updates
+- Test governance power calculation
 
-This ecosystem provides:
-✅ Real utility (not speculative)
-✅ AI + Web3 separation of powers
-✅ Fairness via staking & reputation
-✅ Gasless UX preserved
-✅ Wallet-agnostic
-✅ Extensible DAO
-✅ Clear economic logic
+### Frontend Tests
+- Test hooks with mock data
+- Test component rendering
+- Test user interactions
 
-This reads like a protocol, not an app.
+## Documentation
 
+- **Contract ABIs**: `/contracts/abis/`
+- **Frontend Hooks**: `/client/src/hooks/useVery*.ts`
+- **Components**: `/client/src/components/VeryEcosystem.tsx`
+- **Pages**: `/client/src/pages/TokenEcosystem.tsx`
+
+## Support
+
+For questions or issues:
+1. Check contract documentation in Solidity files
+2. Review frontend hook implementations
+3. Check component examples
+4. Review test files for usage patterns
+
+---
+
+**Built for VeryTippers Hackathon** 🚀

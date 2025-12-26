@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Zap, Shield, Gamepad2, Bot } from "lucide-react";
 import { toast } from "sonner";
+import { VeryIcon } from "./brand";
 
 export const FeaturesSection = () => {
   const [gasLevel, setGasLevel] = useState(0);
@@ -92,7 +93,7 @@ export const FeaturesSection = () => {
       demo: (
         <div className="flex gap-3 mt-4 justify-center">
           {[
-            { icon: "💬", label: "VeryChat" },
+            { icon: "very", label: "VeryChat" },
             { icon: "👛", label: "Wepin" },
             { icon: "⛓️", label: "VERY Chain" },
           ].map((item, i) => (
@@ -101,7 +102,11 @@ export const FeaturesSection = () => {
               className="w-14 h-14 bg-very-gray-900 rounded-xl flex flex-col items-center justify-center border-2 border-border hover:border-primary transition-all cursor-pointer group"
               title={item.label}
             >
-              <span className="text-xl group-hover:scale-110 transition-transform">{item.icon}</span>
+              {item.icon === "very" ? (
+                <VeryIcon size={24} className="group-hover:scale-110 transition-transform" />
+              ) : (
+                <span className="text-xl group-hover:scale-110 transition-transform">{item.icon}</span>
+              )}
               <span className="text-[10px] text-muted-foreground mt-0.5">{item.label}</span>
             </div>
           ))}

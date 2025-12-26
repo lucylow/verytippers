@@ -1029,23 +1029,19 @@ Return ONLY valid JSON matching the schema.`;
     });
 
     // --- Social Features API Endpoints ---
-    // Import SocialService - adjust path based on project structure
+    // Import SocialService and DatabaseService
+    const { DatabaseService } = await import('./services/DatabaseService');
     let SocialService: any;
+    let socialService: any = null;
+    
     try {
         const socialModule = await import('../backend/src/services/social/SocialService');
         SocialService = socialModule.SocialService;
+        const db = DatabaseService.getInstance();
+        socialService = new SocialService(db);
     } catch (error) {
-        // Fallback: try alternative path
-        try {
-            const socialModule = await import('./services/SocialService');
-            SocialService = socialModule.SocialService;
-        } catch (e) {
-            console.warn('SocialService not found, social features will be limited');
-            SocialService = null;
-        }
+        console.warn('SocialService not available, social features will be limited:', error);
     }
-    
-    const socialService = SocialService ? new SocialService() : null;
 
     // Follow a user
     app.post('/api/social/follow', async (req: Request, res: Response) => {

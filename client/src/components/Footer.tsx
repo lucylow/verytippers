@@ -2,10 +2,26 @@ import { VeryLogo } from "./brand";
 
 const footerLinks = {
   resources: [
-    { label: "VeryChat API Docs", url: "https://developers.verylabs.io/" },
-    { label: "VERY Chain Docs", url: "https://wp.verylabs.io/verychain" },
-    { label: "Wepin Wallet Docs", url: "https://docs.wepin.io/en" },
-    { label: "Technical Whitepaper", url: "#" },
+    { 
+      label: "VeryChat API Docs", 
+      url: "https://developers.verylabs.io/",
+      description: "Complete API documentation and setup guide"
+    },
+    { 
+      label: "Project Registration", 
+      url: "https://developers.verylabs.io/",
+      description: "Register your project to get API credentials"
+    },
+    { 
+      label: "VERY Chain Docs", 
+      url: "https://wp.verylabs.io/verychain",
+      description: "VERY Chain network specifications"
+    },
+    { 
+      label: "Wepin Wallet Docs", 
+      url: "https://docs.wepin.io/en",
+      description: "Web3 wallet integration guide"
+    },
   ],
   project: [
     { label: "Live Demo", url: "#demo" },
@@ -55,9 +71,22 @@ export const Footer = () => {
                     href={link.url}
                     target={link.url.startsWith("http") ? "_blank" : undefined}
                     rel={link.url.startsWith("http") ? "noopener noreferrer" : undefined}
-                    className="text-muted-foreground hover:text-foreground transition-colors text-sm"
+                    className="text-muted-foreground hover:text-foreground transition-colors text-sm group"
+                    title={link.description}
                   >
-                    {link.label}
+                    <span className="flex items-center gap-1">
+                      {link.label}
+                      {link.url.startsWith("http") && (
+                        <svg className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      )}
+                    </span>
+                    {link.description && (
+                      <span className="block text-xs text-muted-foreground/70 mt-0.5">
+                        {link.description}
+                      </span>
+                    )}
                   </a>
                 </li>
               ))}
