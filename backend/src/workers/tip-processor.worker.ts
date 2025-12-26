@@ -3,7 +3,7 @@ import Redis from 'ioredis';
 import { logger } from '../utils/logger';
 import { config } from '../config/config';
 import { BlockchainService } from '../services/blockchain.service';
-import { LeaderboardService } from '../services/leaderboard.service';
+import { LeaderboardService } from '../services/Leaderboard.service';
 import { AIInsightsService } from '../services/ai-insights.service';
 import { Pool } from 'pg';
 import type { TipJobData } from '../types';

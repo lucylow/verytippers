@@ -17,7 +17,7 @@ import { EncryptionService } from './services/encryption.service';
 import { IPFSService } from './services/ipfs.service';
 import { ModerationService } from './services/moderation.service';
 import { BlockchainService } from './services/blockchain.service';
-import { LeaderboardService } from './services/leaderboard.service';
+import { LeaderboardService } from './services/Leaderboard.service';
 import { AIInsightsService } from './services/ai-insights.service';
 import { VerychatApiService } from './services/verychat/VerychatApi.service';
 

@@ -1,4 +1,4 @@
-import { BigNumber } from 'ethers';
+// ethers v6 uses native bigint instead of BigNumber
 import { PrismaService } from '../database/prisma.service';
 import { config } from '../../config/app';
 import { logger } from '../../utils/logger';
@@ -81,7 +81,7 @@ export class GasSponsorshipService {
     }
   }
   
-  async useCredit(userId: string, gasUsed: BigNumber): Promise<void> {
+  async useCredit(userId: string, gasUsed: bigint): Promise<void> {
     try {
       const sponsorship = await this.prisma.prisma.gasSponsorship.findUnique({
         where: { userId }

@@ -107,9 +107,16 @@ export class ModerationService {
       if (toxicityResult.status === 'fulfilled') {
         const toxicity = toxicityResult.value;
         if (Array.isArray(toxicity) && toxicity.length > 0) {
-          toxicityScore = Math.max(
-            ...toxicity[0].map((item: any) => item.score || 0)
-          );
+          const firstItem = toxicity[0];
+          if (Array.isArray(firstItem)) {
+            toxicityScore = Math.max(
+              ...firstItem.map((item: any) => item.score || 0)
+            );
+          } else if (firstItem && typeof firstItem === 'object' && 'score' in firstItem) {
+            toxicityScore = firstItem.score || 0;
+          }
+        } else if (toxicity && typeof toxicity === 'object' && 'score' in toxicity) {
+          toxicityScore = (toxicity as any).score || 0;
         }
       }
 
@@ -118,9 +125,20 @@ export class ModerationService {
       if (sentimentResult.status === 'fulfilled') {
         const sentiment = sentimentResult.value;
         if (Array.isArray(sentiment) && sentiment.length > 0) {
-          // Find positive/negative scores
-          const positive = sentiment[0].find((s: any) => s.label?.toLowerCase().includes('positive'));
-          sentimentScore = positive?.score || 0;
+          const firstItem = sentiment[0];
+          if (Array.isArray(firstItem)) {
+            // Find positive/negative scores
+            const positive = firstItem.find((s: any) => s.label?.toLowerCase().includes('positive'));
+            sentimentScore = positive?.score || 0;
+          } else if (firstItem && typeof firstItem === 'object' && 'label' in firstItem) {
+            if (firstItem.label?.toLowerCase().includes('positive')) {
+              sentimentScore = (firstItem as any).score || 0;
+            }
+          }
+        } else if (sentiment && typeof sentiment === 'object' && 'label' in sentiment) {
+          if ((sentiment as any).label?.toLowerCase().includes('positive')) {
+            sentimentScore = (sentiment as any).score || 0;
+          }
         }
       }
 

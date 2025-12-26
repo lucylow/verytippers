@@ -430,6 +430,11 @@ function Router() {
           <TokenEcosystem />
         </RouteErrorBoundary>
       </Route>
+      <Route path="/verychain">
+        <RouteErrorBoundary route="/verychain">
+          <Verychain />
+        </RouteErrorBoundary>
+      </Route>
       <Route path="/404">
         <RouteErrorBoundary route="/404">
           <NotFound />

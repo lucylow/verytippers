@@ -1,12 +1,12 @@
 import { Pool } from 'pg';
 import Redis from 'ioredis';
-import { LeaderboardService } from '../services/leaderboard.service';
+import { LeaderboardService } from '../services/Leaderboard.service';
 import { AIInsightsService } from '../services/ai-insights.service';
 import { IPFSService } from '../services/ipfs.service';
 import { EncryptionService } from '../services/encryption.service';
 import { BlockchainService } from '../services/blockchain.service';
 import { logger } from '../utils/logger';
-import type { GraphQLContext } from '../types';
+import type { MercuriusContext } from 'mercurius';
 
 /**
  * GraphQL Resolvers
@@ -148,7 +148,7 @@ export function createResolvers(
           amount,
           message
         }: { senderId: string; recipientId: string; amount: number; message: string },
-        context: GraphQLContext
+        context: MercuriusContext
       ) => {
         // Note: Actual tip sending is handled by REST API endpoint
         // This mutation is a placeholder for GraphQL interface
