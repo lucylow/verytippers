@@ -284,9 +284,8 @@ class VeryTippersBackend {
             });
             // Continue with moderation - allow tip to proceed but log the failure
             moderationResult = {
+              isSafe: true,
               action: 'allow',
-              confidence: 0,
-              flags: [],
               reason: 'Moderation service unavailable'
             };
           }

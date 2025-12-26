@@ -45,13 +45,12 @@ export function BadgeDisplay({ userId: propUserId, className }: BadgeDisplayProp
 
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/v1/badges/user/${userId}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.data) {
-          setBadges(data.data.badges || []);
-          setStats(data.data.stats || null);
-        }
+      const { getUserBadges } = await import('@/lib/api');
+      const result = await getUserBadges(userId);
+      
+      if (result.success && result.data) {
+        setBadges(result.data.badges || []);
+        setStats(result.data.stats || null);
       }
     } catch (error) {
       console.error('Error fetching badges:', error);
@@ -65,22 +64,14 @@ export function BadgeDisplay({ userId: propUserId, className }: BadgeDisplayProp
 
     setIsChecking(true);
     try {
-      const response = await fetch('/api/v1/badges/check', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ userId }),
-      });
+      const { checkBadges } = await import('@/lib/api');
+      const result = await checkBadges(userId);
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.data.newBadges.length > 0) {
-          // Refresh badges after checking
-          await fetchBadges();
-          // Could show a notification here for new badges
-          console.log('New badges awarded!', data.data.newBadges);
-        }
+      if (result.success && result.data && result.data.newBadges.length > 0) {
+        // Refresh badges after checking
+        await fetchBadges();
+        // Could show a notification here for new badges
+        console.log('New badges awarded!', result.data.newBadges);
       }
     } catch (error) {
       console.error('Error checking achievements:', error);

@@ -68,20 +68,18 @@ export const WalletButton: React.FC<WalletButtonProps> = ({ className }) => {
     if (!address) return;
     setLoadingStats(true);
     try {
-      // Try to fetch user stats from API
-      const response = await fetch(`/api/v1/analytics/user/${address}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.data) {
-          setUserStats({
-            tipsSent: data.data.totalTipsSent || 0,
-            tipsReceived: data.data.totalTipsReceived || 0,
-            totalAmount: data.data.totalAmount || '0',
-            rank: data.data.rank,
-            followers: data.data.followers || 0,
-            following: data.data.following || 0,
-          });
-        }
+      const { getUserAnalytics } = await import('@/lib/api');
+      const result = await getUserAnalytics(address);
+      
+      if (result.success && result.data) {
+        setUserStats({
+          tipsSent: result.data.tipsSent || 0,
+          tipsReceived: result.data.tipsReceived || 0,
+          totalAmount: result.data.totalAmount || '0',
+          rank: result.data.rank,
+          followers: result.data.followers || 0,
+          following: result.data.following || 0,
+        });
       }
     } catch (error) {
       console.error('Failed to fetch user stats:', error);

@@ -74,16 +74,16 @@ export function SocialActivityPanel({
 
   const fetchActivities = async () => {
     try {
-      // Fetch recent tips
-      const feedResponse = await fetch(`/api/v1/feed?limit=${limit}`);
-      const feedData = await feedResponse.json();
+      const { getTipFeed, getPlatformAnalytics } = await import('@/lib/api');
+      
+      // Fetch recent tips and community stats in parallel
+      const [feedResult, statsResult] = await Promise.all([
+        getTipFeed(limit),
+        getPlatformAnalytics(),
+      ]);
 
-      // Fetch community stats
-      const statsResponse = await fetch('/api/v1/analytics/platform');
-      const statsData = await statsResponse.json();
-
-      if (feedData.success) {
-        const formattedActivities: ActivityItem[] = feedData.data.map((tip: any) => ({
+      if (feedResult.success && feedResult.data) {
+        const formattedActivities: ActivityItem[] = feedResult.data.map((tip: any) => ({
           id: tip.id,
           type: 'tip' as const,
           user: {
@@ -91,18 +91,18 @@ export function SocialActivityPanel({
           },
           action: `tipped ${tip.amount} VERY`,
           amount: tip.amount,
-          timestamp: new Date(tip.createdAt),
+          timestamp: new Date(tip.timestamp),
           txHash: tip.txHash,
         }));
         setActivities(formattedActivities);
       }
 
-      if (statsData.success && statsData.data) {
+      if (statsResult.success && statsResult.data) {
         setStats({
-          totalUsers: statsData.data.totalUsers || 0,
-          activeToday: statsData.data.activeToday || 0,
-          totalTips: statsData.data.totalTips || 0,
-          totalVolume: statsData.data.totalVolume || '0',
+          totalUsers: statsResult.data.totalUsers || 0,
+          activeToday: 0, // Not available in current API response
+          totalTips: statsResult.data.totalTips || 0,
+          totalVolume: statsResult.data.totalAmount || '0',
         });
       }
     } catch (error) {
