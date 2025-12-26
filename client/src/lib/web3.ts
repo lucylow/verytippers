@@ -1,8 +1,21 @@
-import { ethers } from 'ethers';
+/**
+ * Legacy Web3 Module - Maintains backward compatibility
+ * New code should use @/lib/web3/index instead
+ */
 
-const CONTRACT_ADDRESSES = {
-    TIP_CONTRACT: '0xTipContractAddress',
-    VERY_TOKEN: '0xVeryTokenAddress',
+import { ethers } from 'ethers';
+import {
+  signMetaTxAuto,
+  buildMetaTx,
+  getNonce,
+  ensureVeryNetwork,
+  CONTRACTS
+} from './web3/index';
+
+// Re-export for backward compatibility
+export const CONTRACT_ADDRESSES = {
+    TIP_CONTRACT: CONTRACTS.tipRouter.address,
+    VERY_TOKEN: CONTRACTS.veryToken.address,
 };
 
 export class WalletError extends Error {
@@ -27,6 +40,10 @@ export class NetworkError extends Error {
     }
 }
 
+/**
+ * Legacy signTipMetaTx - Now uses new Web3 modules
+ * @deprecated Use signMetaTxAuto from @/lib/web3/index instead
+ */
 export async function signTipMetaTx(
     senderAddress: string,
     recipientAddress: string,
@@ -35,125 +52,23 @@ export async function signTipMetaTx(
     messageHash: string
 ): Promise<string> {
     try {
-        if (!window.ethereum) {
-            throw new WalletError(
-                "No crypto wallet found. Please install a wallet extension like MetaMask.",
-                "NO_WALLET"
-            );
-        }
+        // Ensure network
+        await ensureVeryNetwork();
 
-        // Validate addresses
-        if (!ethers.isAddress(senderAddress)) {
-            throw new WalletError(
-                `Invalid sender address: ${senderAddress}`,
-                "INVALID_ADDRESS"
-            );
-        }
+        // Get nonce
+        const nonce = await getNonce(senderAddress);
 
-        if (!ethers.isAddress(recipientAddress)) {
-            throw new WalletError(
-                `Invalid recipient address: ${recipientAddress}`,
-                "INVALID_ADDRESS"
-            );
-        }
-
-        if (!ethers.isAddress(token)) {
-            throw new WalletError(
-                `Invalid token address: ${token}`,
-                "INVALID_ADDRESS"
-            );
-        }
-
-        // Validate amount
-        try {
-            const parsedAmount = ethers.parseUnits(amount, 18);
-            if (parsedAmount <= 0n) {
-                throw new WalletError(
-                    "Amount must be greater than zero",
-                    "INVALID_AMOUNT"
-                );
-            }
-        } catch (error) {
-            if (error instanceof WalletError) {
-                throw error;
-            }
-            throw new WalletError(
-                `Invalid amount format: ${amount}`,
-                "INVALID_AMOUNT",
-                error
-            );
-        }
-
-        let provider: ethers.BrowserProvider;
-        try {
-            provider = new ethers.BrowserProvider(window.ethereum);
-        } catch (error) {
-            throw new WalletError(
-                "Failed to initialize wallet provider",
-                "PROVIDER_INIT_ERROR",
-                error
-            );
-        }
-
-        let signer: ethers.JsonRpcSigner;
-        try {
-            signer = await provider.getSigner();
-        } catch (error) {
-            throw new WalletError(
-                "Failed to get wallet signer. Please ensure your wallet is unlocked.",
-                "SIGNER_ERROR",
-                error
-            );
-        }
-
-        const domain = {
-            name: 'VeryTippers',
-            version: '1',
-            chainId: 12345, // Very Chain ID
-            verifyingContract: CONTRACT_ADDRESSES.TIP_CONTRACT
-        };
-
-        const types = {
-            Tip: [
-                { name: 'from', type: 'address' },
-                { name: 'to', type: 'address' },
-                { name: 'token', type: 'address' },
-                { name: 'amount', type: 'uint256' },
-                { name: 'messageHash', type: 'string' }
-            ]
-        };
-
-        const value = {
+        // Build meta-transaction (using messageHash as CID for backward compatibility)
+        const metaTx = buildMetaTx({
             from: senderAddress,
             to: recipientAddress,
-            token: token,
-            amount: ethers.parseUnits(amount, 18),
-            messageHash: messageHash
-        };
+            amount: parseFloat(amount),
+            cid: messageHash || '0x0',
+            nonce
+        });
 
-        try {
-            const signature = await signer.signTypedData(domain, types, value);
-            return signature;
-        } catch (error: unknown) {
-            // Handle user rejection
-            if (error && typeof error === 'object' && 'code' in error) {
-                const errorCode = (error as { code: string }).code;
-                if (errorCode === 'ACTION_REJECTED' || errorCode === '4001') {
-                    throw new WalletError(
-                        "Transaction signature was rejected by user",
-                        "USER_REJECTED",
-                        error
-                    );
-                }
-            }
-
-            // Handle other signing errors
-            throw new WalletError(
-                "Failed to sign transaction. Please try again.",
-                "SIGNING_ERROR",
-                error
-            );
-        }
+        // Sign using new signing function
+        return await signMetaTxAuto(metaTx);
     } catch (error) {
         // Re-throw WalletError as-is
         if (error instanceof WalletError) {
