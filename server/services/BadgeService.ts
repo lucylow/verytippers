@@ -62,10 +62,21 @@ export class BadgeService {
         // Ensure badge exists in database
         await this.ensureBadgeExists(badge);
 
+        // Get badge internal ID
+        const badgeRecord = await this.db.badge.findUnique({
+          where: { badgeId: badge.badgeId }
+        });
+        
+        if (!badgeRecord) {
+          console.error(`Badge ${badge.badgeId} not found in database`);
+          continue;
+        }
+
         // Award badge to user
         await this.db.userBadge.create({
           data: {
             userId,
+            badgeInternalId: badgeRecord.id,
             badgeId: badge.badgeId,
             metadata: {
               criteria: badge.criteria,
