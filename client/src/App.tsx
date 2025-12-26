@@ -32,10 +32,6 @@ import { errorLogger } from "@/lib/errors/errorLogger";
 import { errorRecovery } from "@/lib/errors/errorRecovery";
 import { withTimeout, safeAsync } from "@/lib/utils/retry";
 
-// Re-export utilities for backward compatibility
-export { retryOperation, safeAsync, DEFAULT_RETRY_CONFIG } from "@/lib/utils/retry";
-export type { RetryConfig } from "@/lib/utils/retry";
-
 /**
  * Route-level error boundary wrapper
  */
