@@ -54,36 +54,129 @@ class VeryTippersBackend {
   private startTime: number;
 
   constructor() {
-    this.fastify = Fastify({
-      logger: config.SERVER.NODE_ENV === 'development',
-      requestIdLogLabel: 'reqId',
-      disableRequestLogging: false
-    });
-    this.startTime = Date.now();
+    try {
+      this.fastify = Fastify({
+        logger: config.SERVER.NODE_ENV === 'development',
+        requestIdLogLabel: 'reqId',
+        disableRequestLogging: false
+      });
+      this.startTime = Date.now();
 
-    // Initialize services
-    this.pgPool = new Pool({
-      connectionString: config.DATABASE.URL,
-      max: config.DATABASE.POOL_SIZE,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000
-    });
+      // Initialize database connection with error handling
+      try {
+        this.pgPool = new Pool({
+          connectionString: config.DATABASE.URL,
+          max: config.DATABASE.POOL_SIZE,
+          idleTimeoutMillis: 30000,
+          connectionTimeoutMillis: 2000
+        });
 
-    this.redis = new Redis(config.REDIS.URL, {
-      retryStrategy: (times) => {
-        const delay = Math.min(times * 50, 2000);
-        return delay;
-      },
-      maxRetriesPerRequest: 3
-    });
+        // Set up error handlers for pool
+        this.pgPool.on('error', (err) => {
+          logger.error('Unexpected database pool error', { error: err });
+        });
 
-    this.encryptionService = new EncryptionService();
-    this.ipfsService = new IPFSService();
-    this.moderationService = new ModerationService();
-    this.blockchainService = new BlockchainService();
-    this.tipProcessor = new TipProcessorWorker(this.redis, this.pgPool);
-    this.wsManager = new WebSocketManager(this.fastify);
-    this.verychatApi = new VerychatApiService(this.redis);
+        this.pgPool.on('connect', () => {
+          logger.debug('New database connection established');
+        });
+      } catch (error) {
+        logger.error('Failed to initialize database pool', { error });
+        throw new Error('Database initialization failed');
+      }
+
+      // Initialize Redis with error handling
+      try {
+        this.redis = new Redis(config.REDIS.URL, {
+          retryStrategy: (times) => {
+            const delay = Math.min(times * 50, 2000);
+            logger.warn('Redis connection retry', { attempt: times, delay });
+            return delay;
+          },
+          maxRetriesPerRequest: 3,
+          enableReadyCheck: true,
+          enableOfflineQueue: false
+        });
+
+        this.redis.on('error', (err) => {
+          logger.error('Redis connection error', { error: err });
+        });
+
+        this.redis.on('connect', () => {
+          logger.info('Redis connection established');
+        });
+
+        this.redis.on('ready', () => {
+          logger.info('Redis connection ready');
+        });
+
+        this.redis.on('close', () => {
+          logger.warn('Redis connection closed');
+        });
+
+        this.redis.on('reconnecting', () => {
+          logger.info('Redis reconnecting');
+        });
+      } catch (error) {
+        logger.error('Failed to initialize Redis', { error });
+        throw new Error('Redis initialization failed');
+      }
+
+      // Initialize services with error handling
+      try {
+        this.encryptionService = new EncryptionService();
+      } catch (error) {
+        logger.error('Failed to initialize encryption service', { error });
+        throw new Error('Encryption service initialization failed');
+      }
+
+      try {
+        this.ipfsService = new IPFSService();
+        // IPFS service can fail gracefully, so we don't throw
+      } catch (error) {
+        logger.error('Failed to initialize IPFS service', { error });
+        // Continue without IPFS in degraded mode
+      }
+
+      try {
+        this.moderationService = new ModerationService();
+      } catch (error) {
+        logger.error('Failed to initialize moderation service', { error });
+        throw new Error('Moderation service initialization failed');
+      }
+
+      try {
+        this.blockchainService = new BlockchainService();
+      } catch (error) {
+        logger.error('Failed to initialize blockchain service', { error });
+        // Blockchain service is critical, but we can continue in degraded mode
+        logger.warn('Continuing without blockchain service - some features will be unavailable');
+      }
+
+      try {
+        this.tipProcessor = new TipProcessorWorker(this.redis, this.pgPool);
+      } catch (error) {
+        logger.error('Failed to initialize tip processor', { error });
+        throw new Error('Tip processor initialization failed');
+      }
+
+      try {
+        this.wsManager = new WebSocketManager(this.fastify);
+      } catch (error) {
+        logger.error('Failed to initialize WebSocket manager', { error });
+        throw new Error('WebSocket manager initialization failed');
+      }
+
+      try {
+        this.verychatApi = new VerychatApiService(this.redis);
+        // VeryChat API can fail gracefully, so we don't throw
+      } catch (error) {
+        logger.error('Failed to initialize VeryChat API service', { error });
+        // Continue without VeryChat API in degraded mode
+      }
+    } catch (error) {
+      logger.error('Failed to initialize VeryTippersBackend', { error });
+      throw error;
+    }
   }
 
   /**

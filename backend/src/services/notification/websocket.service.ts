@@ -1,20 +1,22 @@
 import { Server as HttpServer } from 'http';
-import { Server as SocketIOServer } from 'socket.io';
+// import { Server as SocketIOServer } from 'socket.io'; // TODO: Install socket.io if needed
 import { logger } from '../../utils/logger';
 import jwt from 'jsonwebtoken';
 import { config } from '../../config/app';
 import { PrismaService } from '../database/prisma.service';
 
 export class WebSocketService {
-  private io: SocketIOServer | null = null;
+  private io: any | null = null; // TODO: Use SocketIOServer type when socket.io is installed
   private prisma: PrismaService;
   
   constructor() {
     this.prisma = PrismaService.getInstance();
   }
   
-  initialize(httpServer: HttpServer): SocketIOServer {
-    this.io = new SocketIOServer(httpServer, {
+  initialize(httpServer: HttpServer): any {
+    // TODO: Install socket.io package and uncomment
+    throw new Error('Socket.io not installed. Please install socket.io package to use WebSocketService.');
+    /* this.io = new SocketIOServer(httpServer, {
       cors: {
         origin: config.CORS_ORIGINS,
         credentials: true
@@ -75,6 +77,7 @@ export class WebSocketService {
     
     logger.info('✅ WebSocket server initialized');
     return this.io;
+    */
   }
   
   emitToUser(userId: string, event: string, data: any): void {
@@ -101,12 +104,12 @@ export class WebSocketService {
     }
   }
   
-  getIO(): SocketIOServer | null {
+  getIO(): any | null {
     return this.io;
   }
 }
 
-export const setupWebSocket = (httpServer: HttpServer): SocketIOServer => {
+export const setupWebSocket = (httpServer: HttpServer): any => {
   const wsService = new WebSocketService();
   return wsService.initialize(httpServer);
 };

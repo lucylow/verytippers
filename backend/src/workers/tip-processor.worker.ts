@@ -74,55 +74,131 @@ export class TipProcessorWorker {
       jobId: job.id,
       senderId,
       recipientId,
-      amount: amount.toString()
+      amount: amount.toString(),
+      attemptsMade: job.attemptsMade
     });
 
     try {
+      // Validate job data
+      if (!senderId || !recipientId) {
+        throw new Error('Missing required fields: senderId or recipientId');
+      }
+
+      if (!amount || amount <= 0n) {
+        throw new Error('Invalid amount: must be greater than zero');
+      }
+
       // Update progress
-      await job.updateProgress(10);
+      try {
+        await job.updateProgress(10);
+      } catch (progressError) {
+        logger.warn('Failed to update job progress', {
+          error: progressError,
+          jobId: job.id,
+          progress: 10
+        });
+        // Continue processing even if progress update fails
+      }
 
       // 1. Submit to VERY Chain relayer (gasless) with circuit breaker
-      await job.updateProgress(20);
-      const txHash = await circuitBreakers.blockchain.execute(async () => {
-        return await this.blockchainService.submitToRelayer(
+      let txHash: string;
+      try {
+        await job.updateProgress(20);
+        txHash = await circuitBreakers.blockchain.execute(async () => {
+          return await this.blockchainService.submitToRelayer(
+            senderId,
+            amount,
+            recipientId,
+            ipfsCid
+          );
+        });
+      } catch (blockchainError) {
+        logger.error('Blockchain submission failed', {
+          error: blockchainError,
+          jobId: job.id,
           senderId,
-          amount,
-          recipientId,
-          ipfsCid
-        );
-      });
+          recipientId
+        });
+        throw blockchainError; // Will trigger retry
+      }
 
       // 2. Update leaderboards (Redis + PostgreSQL) with circuit breaker
-      await job.updateProgress(50);
-      await circuitBreakers.database.execute(async () => {
-        await this.leaderboardService.updateLeaderboards(
+      try {
+        await job.updateProgress(50);
+        await circuitBreakers.database.execute(async () => {
+          await this.leaderboardService.updateLeaderboards(
+            senderId,
+            recipientId,
+            amount,
+            ipfsCid
+          );
+        });
+      } catch (leaderboardError) {
+        logger.error('Leaderboard update failed', {
+          error: leaderboardError,
+          jobId: job.id,
           senderId,
-          recipientId,
-          amount,
-          ipfsCid
-        );
-      });
+          recipientId
+        });
+        // Don't throw - leaderboard update failure shouldn't fail the entire tip
+        // But log it for monitoring
+      }
 
       // 3. Generate AI insights (async, don't block)
-      await job.updateProgress(70);
-      this.generateInsightsAsync(senderId).catch(err => {
-        logger.error('Failed to generate insights', { error: err, userId: senderId });
-      });
+      try {
+        await job.updateProgress(70);
+        this.generateInsightsAsync(senderId).catch(err => {
+          logger.error('Failed to generate insights', {
+            error: err,
+            userId: senderId,
+            jobId: job.id
+          });
+        });
+      } catch (insightsError) {
+        logger.warn('Failed to trigger insights generation', {
+          error: insightsError,
+          userId: senderId,
+          jobId: job.id
+        });
+        // Don't throw - insights are optional
+      }
 
       // 4. Check achievements (async)
-      this.checkAchievementsAsync(senderId).catch(err => {
-        logger.error('Failed to check achievements', { error: err, userId: senderId });
-      });
+      try {
+        this.checkAchievementsAsync(senderId).catch(err => {
+          logger.error('Failed to check achievements', {
+            error: err,
+            userId: senderId,
+            jobId: job.id
+          });
+        });
+      } catch (achievementsError) {
+        logger.warn('Failed to trigger achievement check', {
+          error: achievementsError,
+          userId: senderId,
+          jobId: job.id
+        });
+        // Don't throw - achievements are optional
+      }
 
       // 5. Update job progress
-      await job.updateProgress(100);
+      try {
+        await job.updateProgress(100);
+      } catch (progressError) {
+        logger.warn('Failed to update final job progress', {
+          error: progressError,
+          jobId: job.id
+        });
+        // Continue even if progress update fails
+      }
 
       logger.info('Tip processed successfully', {
         jobId: job.id,
         senderId,
         recipientId,
         txHash,
-        ipfsCid
+        ipfsCid,
+        attemptsMade: job.attemptsMade
       });
 
       // Return result for WebSocket broadcasting
@@ -135,14 +211,71 @@ export class TipProcessorWorker {
         amount: amount.toString()
       } as any;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+
       logger.error('Tip processing failed', {
-        error,
+        error: errorMessage,
+        stack: errorStack,
         jobId: job.id,
         senderId,
-        recipientId
+        recipientId,
+        attemptsMade: job.attemptsMade,
+        maxAttempts: job.opts?.attempts || 3
       });
-      throw error; // Will trigger retry
+
+      // Check if we should retry
+      const isRetryable = this.isRetryableError(error as Error);
+      const maxAttempts = job.opts?.attempts || 3;
+
+      if (!isRetryable || (job.attemptsMade || 0) >= maxAttempts) {
+        logger.error('Tip processing failed permanently', {
+          jobId: job.id,
+          senderId,
+          recipientId,
+          isRetryable,
+          attemptsMade: job.attemptsMade
+        });
+      }
+
+      throw error; // Will trigger retry if retryable
     }
+  }
+
+  /**
+   * Check if error is retryable
+   */
+  private isRetryableError(error: Error): boolean {
+    const message = error.message.toLowerCase();
+    const retryablePatterns = [
+      'network',
+      'timeout',
+      'connection',
+      'econnrefused',
+      'etimedout',
+      'rate limit',
+      'service unavailable',
+      'bad gateway',
+      'gateway timeout',
+      'circuit breaker open'
+    ];
+
+    const nonRetryablePatterns = [
+      'validation',
+      'invalid',
+      'unauthorized',
+      'forbidden',
+      'not found',
+      'insufficient funds'
+    ];
+
+    // Check for non-retryable patterns first
+    if (nonRetryablePatterns.some(pattern => message.includes(pattern))) {
+      return false;
+    }
+
+    // Check for retryable patterns
+    return retryablePatterns.some(pattern => message.includes(pattern));
   }
 
   /**
@@ -177,23 +310,81 @@ export class TipProcessorWorker {
    */
   private setupEventHandlers(): void {
     this.worker.on('completed', (job) => {
-      logger.info('Tip job completed', { jobId: job.id });
+      try {
+        logger.info('Tip job completed', {
+          jobId: job.id,
+          duration: job.finishedOn && job.processedOn
+            ? job.finishedOn - job.processedOn
+            : undefined
+        });
+      } catch (error) {
+        logger.error('Error handling job completion event', { error });
+      }
     });
 
     this.worker.on('failed', (job, err) => {
-      logger.error('Tip job failed', {
-        jobId: job?.id,
-        error: err,
-        attemptsMade: job?.attemptsMade
-      });
+      try {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        const errorStack = err instanceof Error ? err.stack : undefined;
+
+        logger.error('Tip job failed', {
+          jobId: job?.id,
+          error: errorMessage,
+          stack: errorStack,
+          attemptsMade: job?.attemptsMade,
+          maxAttempts: job?.opts?.attempts,
+          data: job?.data ? {
+            senderId: (job.data as TipJobData).senderId,
+            recipientId: (job.data as TipJobData).recipientId
+          } : undefined
+        });
+      } catch (handlerError) {
+        logger.error('Error handling job failure event', { error: handlerError });
+      }
     });
 
     this.worker.on('error', (err) => {
-      logger.error('Worker error', { error: err });
+      try {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        const errorStack = err instanceof Error ? err.stack : undefined;
+
+        logger.error('Worker error', {
+          error: errorMessage,
+          stack: errorStack
+        });
+      } catch (handlerError) {
+        logger.error('Error handling worker error event', { error: handlerError });
+      }
     });
 
     this.worker.on('stalled', (jobId) => {
-      logger.warn('Job stalled', { jobId });
+      try {
+        logger.warn('Job stalled', { jobId });
+      } catch (error) {
+        logger.error('Error handling job stalled event', { error });
+      }
+    });
+
+    this.worker.on('active', (job) => {
+      try {
+        logger.debug('Job started processing', {
+          jobId: job.id,
+          attemptsMade: job.attemptsMade
+        });
+      } catch (error) {
+        logger.error('Error handling job active event', { error });
+      }
+    });
+
+    this.worker.on('progress', (job, progress) => {
+      try {
+        logger.debug('Job progress update', {
+          jobId: job.id,
+          progress
+        });
+      } catch (error) {
+        logger.error('Error handling job progress event', { error });
+      }
     });
   }
 
@@ -219,20 +410,38 @@ export class TipProcessorWorker {
    * Get queue stats
    */
   async getQueueStats() {
-    const [waiting, active, completed, failed] = await Promise.all([
-      this.queue.getWaitingCount(),
-      this.queue.getActiveCount(),
-      this.queue.getCompletedCount(),
-      this.queue.getFailedCount()
-    ]);
+    try {
+      const [waiting, active, completed, failed] = await Promise.allSettled([
+        this.queue.getWaitingCount(),
+        this.queue.getActiveCount(),
+        this.queue.getCompletedCount(),
+        this.queue.getFailedCount()
+      ]);
 
-    return {
-      waiting,
-      active,
-      completed,
-      failed,
-      total: waiting + active + completed + failed
-    };
+      return {
+        waiting: waiting.status === 'fulfilled' ? waiting.value : 0,
+        active: active.status === 'fulfilled' ? active.value : 0,
+        completed: completed.status === 'fulfilled' ? completed.value : 0,
+        failed: failed.status === 'fulfilled' ? failed.value : 0,
+        total: (
+          (waiting.status === 'fulfilled' ? waiting.value : 0) +
+          (active.status === 'fulfilled' ? active.value : 0) +
+          (completed.status === 'fulfilled' ? completed.value : 0) +
+          (failed.status === 'fulfilled' ? failed.value : 0)
+        ),
+        errors: {
+          waiting: waiting.status === 'rejected' ? (waiting.reason as Error).message : undefined,
+          active: active.status === 'rejected' ? (active.reason as Error).message : undefined,
+          completed: completed.status === 'rejected' ? (completed.reason as Error).message : undefined,
+          failed: failed.status === 'rejected' ? (failed.reason as Error).message : undefined
+        }
+      };
+    } catch (error) {
+      logger.error('Failed to get queue stats', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+      throw new Error(`Failed to get queue stats: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   /**

@@ -26,7 +26,7 @@ export function NavLink({
     : location === href || (href !== "/" && location.startsWith(href));
   
   const linkClasses = cn(
-    "transition-colors font-medium relative",
+    "transition-colors font-medium relative inline-block",
     isActive 
       ? cn("text-foreground", activeClassName)
       : "text-muted-foreground hover:text-foreground",
@@ -35,10 +35,10 @@ export function NavLink({
 
   return (
     <Link href={href} className={linkClasses}>
-      {children}
+      <span className="relative z-10">{children}</span>
       {isActive && (
         <span 
-          className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full"
+          className="absolute -bottom-1 left-0 right-0 h-0.5 bg-primary rounded-full"
           aria-hidden="true"
         />
       )}

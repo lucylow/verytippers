@@ -22,6 +22,7 @@ import { VoiceTippingButton } from "./components/VoiceTippingButton";
 import { NetworkSelector } from "./components/NetworkSelector";
 import MobileShell from "./components/MobileShell";
 import { TransactionAnnouncerProvider } from "./components/accessibility";
+import { ScrollToTop } from "./components/ScrollToTop";
 
 // Import improved error handling utilities
 import { categorizeError, type CategorizedError } from "@/lib/errors/errorTypes";
@@ -384,7 +385,9 @@ function Router() {
 
   // Wrap routes with error boundaries and error handling
   return (
-    <Switch>
+    <>
+      <ScrollToTop />
+      <Switch>
       <Route path="/">
         <RouteErrorBoundary route="/">
           <Home />
@@ -447,6 +450,7 @@ function Router() {
         </RouteErrorBoundary>
       </Route>
     </Switch>
+    </>
   );
 }
 
