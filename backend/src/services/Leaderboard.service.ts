@@ -1,242 +1,146 @@
-// @ts-nocheck
-import { CronJob } from 'cron';
-import { UserRepository } from '../repositories/User.repository';
-import { TipRepository } from '../repositories/Tip.repository';
-import { LeaderboardRepository } from '../repositories/Leaderboard.repository';
-import { config } from '../config/config';
 import Redis from 'ioredis';
+import { Pool } from 'pg';
+import { logger } from '../utils/logger';
+import { config } from '../config/config';
+import type { LeaderboardUser, UserStats } from '../types';
 
-interface LeaderboardEntry {
-  userId: string;
-  username: string;
-  score: number;
-  rank: number;
-  change?: number;
-}
-
+/**
+ * Leaderboard Service for Redis + PostgreSQL indexing
+ */
 export class LeaderboardService {
   private redis: Redis;
-  private userRepo: UserRepository;
-  private tipRepo: TipRepository;
-  private leaderboardRepo: LeaderboardRepository;
+  private pgPool: Pool;
 
-  constructor() {
-    this.redis = new Redis({
-      host: config.REDIS.HOST,
-      port: config.REDIS.PORT,
-      password: config.REDIS.PASSWORD || undefined,
-      ...(config.REDIS.URL && { url: config.REDIS.URL })
-    });
-    this.userRepo = new UserRepository();
-    this.tipRepo = new TipRepository();
-    this.leaderboardRepo = new LeaderboardRepository();
+  constructor(redis: Redis, pgPool: Pool) {
+    this.redis = redis;
+    this.pgPool = pgPool;
   }
 
-  async startCronJobs(): Promise<void> {
-    // Update daily leaderboard at midnight
-    new CronJob('0 0 * * *', () => this.updateDailyLeaderboard()).start();
-    
-    // Update weekly leaderboard on Sunday at 1 AM
-    new CronJob('0 1 * * 0', () => this.updateWeeklyLeaderboard()).start();
-    
-    // Update monthly leaderboard on 1st of month at 2 AM
-    new CronJob('0 2 1 * *', () => this.updateMonthlyLeaderboard()).start();
-    
-    console.log('✅ Leaderboard cron jobs started');
-  }
-
-  async updateDailyLeaderboard(): Promise<void> {
-    const periodStart = new Date();
-    periodStart.setHours(0, 0, 0, 0);
-    const periodEnd = new Date(periodStart);
-    periodEnd.setDate(periodEnd.getDate() + 1);
-
-    // Get tips from last 24 hours
-    const tips = await this.tipRepo.findByPeriod(periodStart, periodEnd);
-    
-    // Calculate scores
-    const scores: Record<string, number> = {};
-    
-    tips.forEach(tip => {
-      scores[tip.senderId] = (scores[tip.senderId] || 0) + parseFloat(tip.amount);
-    });
-
-    // Sort and rank
-    const entries = await this.createEntries(scores, 'tips_sent');
-    
-    // Save to database
-    await this.leaderboardRepo.create({
-      period: 'daily',
-      category: 'tips_sent',
-      rankings: entries,
-      periodStart,
-      periodEnd,
-      calculatedAt: new Date()
-    });
-
-    // Cache in Redis
-    await this.redis.set(
-      `leaderboard:daily:tips_sent`,
-      JSON.stringify(entries),
-      'EX',
-      86400 // 24 hours
-    );
-  }
-
-  async updateWeeklyLeaderboard(): Promise<void> {
-    const periodStart = new Date();
-    periodStart.setDate(periodStart.getDate() - 7);
-    periodStart.setHours(0, 0, 0, 0);
-    
-    const periodEnd = new Date();
-    periodEnd.setHours(23, 59, 59, 999);
-
-    // Multiple categories
-    await Promise.all([
-      this.updateCategory('weekly', 'tips_sent', periodStart, periodEnd),
-      this.updateCategory('weekly', 'tips_received', periodStart, periodEnd),
-      this.updateCategory('weekly', 'unique_tippers', periodStart, periodEnd)
-    ]);
-  }
-
-  async updateMonthlyLeaderboard(): Promise<void> {
-    const periodStart = new Date();
-    periodStart.setDate(1);
-    periodStart.setHours(0, 0, 0, 0);
-    
-    const periodEnd = new Date();
-    periodEnd.setHours(23, 59, 59, 999);
-
-    await Promise.all([
-      this.updateCategory('monthly', 'tips_sent', periodStart, periodEnd),
-      this.updateCategory('monthly', 'tips_received', periodStart, periodEnd),
-      this.updateCategory('monthly', 'unique_tippers', periodStart, periodEnd)
-    ]);
-  }
-
-  private async updateCategory(
-    period: string,
-    category: string,
-    start: Date,
-    end: Date
+  /**
+   * Update leaderboards after tip processing
+   */
+  async updateLeaderboards(
+    senderId: string,
+    recipientId: string,
+    amount: bigint,
+    ipfsCid: string
   ): Promise<void> {
-    let scores: Record<string, number> = {};
+    try {
+      const pipeline = this.redis.pipeline();
+      const amountNumber = Number(amount);
 
-    switch (category) {
-      case 'tips_sent':
-        const tips = await this.tipRepo.findByPeriod(start, end);
-        tips.forEach(tip => {
-          scores[tip.senderId] = (scores[tip.senderId] || 0) + parseFloat(tip.amount);
-        });
-        break;
-      
-      case 'tips_received':
-        const receivedTips = await this.tipRepo.findByPeriod(start, end);
-        receivedTips.forEach(tip => {
-          scores[tip.recipientId] = (scores[tip.recipientId] || 0) + parseFloat(tip.amount);
-        });
-        break;
-      
-      case 'unique_tippers':
-        const uniqueTips = await this.tipRepo.findByPeriod(start, end);
-        const uniqueCounts: Record<string, Set<string>> = {};
-        
-        uniqueTips.forEach(tip => {
-          if (!uniqueCounts[tip.senderId]) {
-            uniqueCounts[tip.senderId] = new Set();
-          }
-          uniqueCounts[tip.senderId].add(tip.recipientId);
-        });
-        
-        Object.entries(uniqueCounts).forEach(([userId, recipients]) => {
-          scores[userId] = recipients.size;
-        });
-        break;
+      // Update sender stats
+      pipeline.zincrby('leaderboard:total_tips', 1, senderId);
+      pipeline.zincrby('leaderboard:total_amount', amountNumber, senderId);
+      pipeline.hincrby(`user:${senderId}`, 'tips_sent', 1);
+      pipeline.hincrby(`user:${senderId}`, 'amount_sent', amountNumber);
+
+      // Update recipient stats
+      pipeline.hincrby(`user:${recipientId}`, 'tips_received', 1);
+      pipeline.hincrby(`user:${recipientId}`, 'amount_received', amountNumber);
+
+      // Weekly rolling window
+      const weekKey = `leaderboard:weekly:${Math.floor(Date.now() / (7 * 24 * 60 * 60 * 1000))}`;
+      pipeline.zincrby(weekKey, amountNumber, senderId);
+
+      await pipeline.exec();
+
+      // Persist to PostgreSQL (async, don't wait)
+      this.pgPool.query(
+        `INSERT INTO tips (sender_id, recipient_id, amount, ipfs_cid, created_at, status)
+         VALUES ($1, $2, $3, $4, NOW(), 'confirmed')
+         ON CONFLICT DO NOTHING`,
+        [senderId, recipientId, amount.toString(), ipfsCid]
+      ).catch(err => {
+        logger.error('Failed to persist tip to PostgreSQL', { error: err });
+      });
+
+      logger.debug('Leaderboards updated', { senderId, recipientId, amount: amountNumber });
+    } catch (error) {
+      logger.error('Leaderboard update failed', { error, senderId, recipientId });
+      throw error;
     }
-
-    const entries = await this.createEntries(scores, category);
-    
-    await this.leaderboardRepo.create({
-      period: period as any,
-      category: category as any,
-      rankings: entries,
-      periodStart: start,
-      periodEnd: end,
-      calculatedAt: new Date()
-    });
-
-    await this.redis.set(
-      `leaderboard:${period}:${category}`,
-      JSON.stringify(entries),
-      'EX',
-      7 * 86400 // 7 days
-    );
   }
 
-  private async createEntries(
-    scores: Record<string, number>,
-    category: string
-  ): Promise<LeaderboardEntry[]> {
-    // Sort by score descending
-    const sorted = Object.entries(scores)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 100); // Top 100
+  /**
+   * Get leaderboard by period
+   */
+  async getLeaderboard(period: 'all' | 'weekly' = 'all', limit: number = 100): Promise<LeaderboardUser[]> {
+    try {
+      const key = period === 'weekly'
+        ? `leaderboard:weekly:${Math.floor(Date.now() / (7 * 24 * 60 * 60 * 1000))}`
+        : 'leaderboard:total_amount';
 
-    // Get user info
-    const entries: LeaderboardEntry[] = [];
-    
-    for (let i = 0; i < sorted.length; i++) {
-      const [userId, score] = sorted[i];
-      const user = await this.userRepo.findByVerychatId(userId);
+      const topUsers = await this.redis.zrevrange(key, 0, limit - 1, 'WITHSCORES');
       
-      if (user) {
-        entries.push({
+      const users: LeaderboardUser[] = [];
+      for (let i = 0; i < topUsers.length; i += 2) {
+        const userId = topUsers[i];
+        const amount = parseFloat(topUsers[i + 1] || '0');
+        
+        // Get tip count
+        const tips = await this.redis.zscore('leaderboard:total_tips', userId) || 0;
+
+        users.push({
+          rank: Math.floor(i / 2) + 1,
           userId,
-          username: user.username || `user_${userId.slice(-4)}`,
-          score,
-          rank: i + 1,
-          change: await this.calculateRankChange(userId, category, i + 1)
+          tips: parseInt(tips.toString()),
+          amount
         });
       }
-    }
 
-    return entries;
+      return users;
+    } catch (error) {
+      logger.error('Failed to get leaderboard', { error, period, limit });
+      throw error;
+    }
   }
 
-  private async calculateRankChange(
-    userId: string,
-    category: string,
-    currentRank: number
-  ): Promise<number | undefined> {
-    // Get previous rank from last period
-    const previous = await this.leaderboardRepo.findPreviousRank(userId, category);
-    return previous ? previous - currentRank : undefined;
+  /**
+   * Get user stats
+   */
+  async getUserStats(userId: string): Promise<UserStats | null> {
+    try {
+      const stats = await this.redis.hgetall(`user:${userId}`);
+      
+      if (!stats || Object.keys(stats).length === 0) {
+        return null;
+      }
+
+      const rankGlobal = await this.redis.zrevrank('leaderboard:total_amount', userId);
+      const weekKey = `leaderboard:weekly:${Math.floor(Date.now() / (7 * 24 * 60 * 60 * 1000))}`;
+      const rankWeekly = await this.redis.zrevrank(weekKey, userId);
+
+      return {
+        userId,
+        tipsSent: parseInt(stats.tips_sent || '0'),
+        tipsReceived: parseInt(stats.tips_received || '0'),
+        amountSent: BigInt(stats.amount_sent || '0'),
+        amountReceived: BigInt(stats.amount_received || '0'),
+        weeklyTips: parseInt(stats.weekly_tips || '0'),
+        weeklyAmount: BigInt(stats.weekly_amount || '0'),
+        rankGlobal: rankGlobal !== null ? rankGlobal + 1 : undefined,
+        rankWeekly: rankWeekly !== null ? rankWeekly + 1 : undefined
+      };
+    } catch (error) {
+      logger.error('Failed to get user stats', { error, userId });
+      throw error;
+    }
   }
 
-  async getLeaderboard(
-    period: string,
-    category: string,
-    limit: number = 10
-  ): Promise<LeaderboardEntry[]> {
-    // Try cache first
-    const cached = await this.redis.get(`leaderboard:${period}:${category}`);
-    if (cached) {
-      const entries = JSON.parse(cached);
-      return entries.slice(0, limit);
+  /**
+   * Get total leaderboard count
+   */
+  async getTotalCount(period: 'all' | 'weekly' = 'all'): Promise<number> {
+    try {
+      const key = period === 'weekly'
+        ? `leaderboard:weekly:${Math.floor(Date.now() / (7 * 24 * 60 * 60 * 1000))}`
+        : 'leaderboard:total_amount';
+
+      return await this.redis.zcard(key);
+    } catch (error) {
+      logger.error('Failed to get leaderboard count', { error, period });
+      return 0;
     }
-
-    // Fallback to database
-    const leaderboard = await this.leaderboardRepo.findLatest(period, category);
-    if (!leaderboard) {
-      return [];
-    }
-
-    return leaderboard.rankings.slice(0, limit);
-  }
-
-  async getUserRank(userId: string, period: string, category: string): Promise<LeaderboardEntry | null> {
-    const entries = await this.getLeaderboard(period, category, 100);
-    return entries.find(entry => entry.userId === userId) || null;
   }
 }
-

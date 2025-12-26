@@ -1,4 +1,6 @@
 import React, { useState } from 'react'
+import { Navbar } from '@/components/Navbar'
+import { Footer } from '@/components/Footer'
 import Chat from '@/components/Chat'
 import TipModal from '@/components/TipModal'
 import Leaderboard from '@/components/Leaderboard'
@@ -7,6 +9,7 @@ import { TipPayload } from '@/types/tip'
 import { toast } from 'sonner'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Activity, Zap } from 'lucide-react'
+import ErrorBoundary from '@/components/ErrorBoundary'
 
 export default function TipDemo() {
   const me = { id: 'u1', username: 'you' } // demo signed-in user
@@ -39,8 +42,26 @@ export default function TipDemo() {
   }
 
   return (
-    <div className="min-h-screen bg-background p-8">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className="min-h-screen bg-background text-foreground">
+      <ErrorBoundary
+        fallback={
+          <div className="min-h-screen flex items-center justify-center">
+            <div className="text-center">
+              <h1 className="text-2xl font-bold mb-2">Failed to load navigation</h1>
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90"
+              >
+                Reload Page
+              </button>
+            </div>
+          </div>
+        }
+      >
+        <Navbar />
+      </ErrorBoundary>
+      <main className="container mx-auto px-4 py-12 max-w-7xl">
+        <div className="space-y-8">
         <div className="text-center space-y-2">
           <h1 className="text-4xl font-bold">VeryTippers — Interactive Demo</h1>
           <p className="text-muted-foreground">
@@ -149,7 +170,17 @@ export default function TipDemo() {
             </Card>
           </div>
         </div>
-      </div>
+        </div>
+      </main>
+      <ErrorBoundary
+        fallback={
+          <div className="py-4 px-4 text-center text-sm text-muted-foreground">
+            Footer unavailable
+          </div>
+        }
+      >
+        <Footer />
+      </ErrorBoundary>
 
       <TipModal
         open={modalOpen}

@@ -34,14 +34,13 @@ export const useAchievementEngine = (): UseAchievementEngineReturn => {
    */
   const fetchBadges = useCallback(async (userId: string) => {
     try {
-      const response = await fetch(`/api/v1/badges/user/${userId}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.data) {
-          setBadges(data.data.badges || []);
-          setStats(data.data.stats || null);
-          return data.data.badges || [];
-        }
+      const { getUserBadges } = await import('@/lib/api');
+      const result = await getUserBadges(userId);
+      
+      if (result.success && result.data) {
+        setBadges(result.data.badges || []);
+        setStats(result.data.stats || null);
+        return result.data.badges || [];
       }
     } catch (error) {
       console.error('Error fetching badges:', error);
@@ -58,26 +57,17 @@ export const useAchievementEngine = (): UseAchievementEngineReturn => {
 
       setIsChecking(true);
       try {
-        // Check for new badges
-        const checkResponse = await fetch('/api/v1/badges/check', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ userId }),
-        });
+        const { checkBadges } = await import('@/lib/api');
+        const result = await checkBadges(userId);
 
-        if (checkResponse.ok) {
-          const checkData = await checkResponse.json();
-          if (checkData.success && checkData.data.newBadges.length > 0) {
-            const newBadges = checkData.data.newBadges;
-            setNewBadgeAlerts(newBadges);
-            showAchievementNotification(newBadges);
+        if (result.success && result.data && result.data.newBadges.length > 0) {
+          const newBadges = result.data.newBadges;
+          setNewBadgeAlerts(newBadges);
+          showAchievementNotification(newBadges);
 
-            // Refresh badges list
-            await fetchBadges(userId);
-            return newBadges;
-          }
+          // Refresh badges list
+          await fetchBadges(userId);
+          return newBadges;
         }
 
         // Always refresh badges even if no new ones

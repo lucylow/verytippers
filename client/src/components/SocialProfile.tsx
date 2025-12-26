@@ -56,24 +56,23 @@ export function SocialProfile({ address, className = '' }: SocialProfileProps) {
   const fetchProfile = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/v1/analytics/user/${address}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.data) {
-          setProfile({
-            address,
-            tipsSent: data.data.totalTipsSent || 0,
-            tipsReceived: data.data.totalTipsReceived || 0,
-            totalAmount: data.data.totalAmount || '0',
-            rank: data.data.rank,
-            followers: data.data.followers || 0,
-            following: data.data.following || 0,
-            badges: data.data.badges || 0,
-            joinedAt: data.data.createdAt,
-            isFollowing: data.data.isFollowing,
-            isOwnProfile,
-          });
-        }
+      const { getUserAnalytics } = await import('@/lib/api');
+      const result = await getUserAnalytics(address);
+      
+      if (result.success && result.data) {
+        setProfile({
+          address,
+          tipsSent: result.data.tipsSent || 0,
+          tipsReceived: result.data.tipsReceived || 0,
+          totalAmount: result.data.totalAmount || '0',
+          rank: result.data.rank,
+          followers: result.data.followers || 0,
+          following: result.data.following || 0,
+          badges: 0, // Not available in current API response
+          joinedAt: undefined, // Not available in current API response
+          isFollowing: undefined, // Not available in current API response
+          isOwnProfile,
+        });
       }
     } catch (error) {
       console.error('Failed to fetch profile:', error);

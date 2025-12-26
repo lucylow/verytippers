@@ -38,12 +38,13 @@ export const WalletConnect: React.FC<WalletConnectProps> = ({ className }) => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const response = await fetch('/api/v1/analytics/platform');
-        const data = await response.json();
-        if (data.success && data.data) {
+        const { getPlatformAnalytics } = await import('@/lib/api');
+        const result = await getPlatformAnalytics();
+        
+        if (result.success && result.data) {
           setCommunityStats({
-            totalUsers: data.data.totalUsers || 1234,
-            activeToday: data.data.activeToday || 89,
+            totalUsers: result.data.totalUsers || 1234,
+            activeToday: 0, // Not available in current API response
           });
         } else {
           // Fallback mock data

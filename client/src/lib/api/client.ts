@@ -214,12 +214,18 @@ class ApiClient {
     const contentType = response.headers.get('content-type');
     if (contentType?.includes('application/json')) {
       const data = await response.json();
-      return this.applyResponseInterceptors(response, data);
+      const processedData = await this.applyResponseInterceptors(response, data);
+      // Wrap in ApiResponse format if not already
+      if (processedData && typeof processedData === 'object' && 'success' in processedData) {
+        return processedData as T;
+      }
+      return { success: true, data: processedData } as T;
     }
 
     // For non-JSON responses, return as text
     const text = await response.text();
-    return this.applyResponseInterceptors(response, text as unknown as T);
+    const processedText = await this.applyResponseInterceptors(response, text);
+    return { success: true, data: processedText } as T;
   }
 
   /**
@@ -242,17 +248,34 @@ class ApiClient {
     // Build URL
     const url = this.buildUrl(endpoint);
 
-    // Merge headers
+    // Merge headers from customHeaders and processedConfig
     const headers = new Headers(customHeaders);
+    if (processedConfig.headers) {
+      if (processedConfig.headers instanceof Headers) {
+        processedConfig.headers.forEach((value, key) => {
+          headers.set(key, value);
+        });
+      } else if (Array.isArray(processedConfig.headers)) {
+        processedConfig.headers.forEach(([key, value]) => {
+          headers.set(key, value);
+        });
+      } else {
+        Object.entries(processedConfig.headers).forEach(([key, value]) => {
+          if (value) headers.set(key, String(value));
+        });
+      }
+    }
+    
     if (!headers.has('Content-Type') && fetchConfig.body) {
       headers.set('Content-Type', 'application/json');
     }
 
-    // Prepare fetch options
+    // Prepare fetch options (exclude headers and config-specific props from spread)
+    const { headers: _processedHeaders, timeout: _timeout, retry: _retry, skipAuth: _skipAuth, ...restProcessedConfig } = processedConfig;
     const fetchOptions: RequestInit = {
+      ...restProcessedConfig,
       ...fetchConfig,
       headers,
-      ...processedConfig,
     };
 
     // Create abort controller
@@ -408,7 +431,11 @@ export const apiClient = new ApiClient(API_BASE_URL);
 // Add default request interceptor for logging (dev only)
 if (import.meta.env.DEV) {
   apiClient.addRequestInterceptor((config) => {
-    console.log('[API Request]', config);
+    console.log('[API Request]', {
+      url: config.url || 'unknown',
+      method: config.method || 'GET',
+      headers: config.headers,
+    });
     return config;
   });
 }

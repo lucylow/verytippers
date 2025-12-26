@@ -286,7 +286,7 @@ class VeryTippersBackend {
             moderationResult = {
               isSafe: true,
               action: 'allow',
-              reason: 'Moderation service unavailable'
+              flaggedReason: 'Moderation service unavailable'
             };
           }
 

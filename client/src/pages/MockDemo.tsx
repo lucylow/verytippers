@@ -6,6 +6,8 @@
  */
 
 import React, { useEffect, useState } from "react";
+import { Navbar } from "@/components/Navbar";
+import { Footer } from "@/components/Footer";
 import { mockBackend } from "@/lib/mockBackend";
 import { User, Tip } from "@/types/mock";
 import ChatInput from "@/components/mock/ChatInput";
@@ -14,6 +16,7 @@ import Leaderboard from "@/components/mock/Leaderboard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 type LeaderboardRow = {
   user: User;
