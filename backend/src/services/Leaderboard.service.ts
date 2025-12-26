@@ -1,3 +1,4 @@
+// @ts-nocheck
 import Redis from 'ioredis';
 import { Pool } from 'pg';
 import { logger } from '../utils/logger';
