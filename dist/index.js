@@ -32,7 +32,6 @@ import { fileURLToPath } from "url";
 var __filename, __dirname, config2;
 var init_config = __esm({
   "server/config.ts"() {
-    "use strict";
     __filename = fileURLToPath(import.meta.url);
     __dirname = path.dirname(__filename);
     dotenv.config({ path: path.resolve(__dirname, "../../.env") });
@@ -92,7 +91,6 @@ import { Wallet, Contract, JsonRpcProvider } from "ethers";
 var TIP_CONTRACT_ABI, BADGE_CONTRACT_ABI, BlockchainService;
 var init_BlockchainService = __esm({
   "server/services/BlockchainService.ts"() {
-    "use strict";
     init_config();
     TIP_CONTRACT_ABI = [
       "function tip(address recipient, address token, uint256 amount, string memory messageHash) external",
@@ -103,6 +101,10 @@ var init_BlockchainService = __esm({
       "function checkAndAwardBadges(address user, uint256 totalTipsSent) external"
     ];
     BlockchainService = class {
+      provider;
+      relayerWallet;
+      tipContract;
+      badgeContract;
       constructor() {
         this.provider = new JsonRpcProvider(config2.VERY_CHAIN_RPC_URL);
         this.relayerWallet = new Wallet(config2.SPONSOR_PRIVATE_KEY, this.provider);
@@ -152,9 +154,10 @@ import { createClient } from "redis";
 var CacheService;
 var init_CacheService = __esm({
   "server/services/CacheService.ts"() {
-    "use strict";
     init_config();
     CacheService = class _CacheService {
+      static instance;
+      client;
       constructor() {
         this.client = createClient({
           url: config2.REDIS_URL
@@ -188,10 +191,11 @@ import { HfInference } from "@huggingface/inference";
 var HuggingFaceService;
 var init_HuggingFaceService = __esm({
   "server/services/HuggingFaceService.ts"() {
-    "use strict";
     init_config();
     init_CacheService();
     HuggingFaceService = class {
+      client;
+      cache;
       constructor() {
         this.client = new HfInference(config2.HUGGINGFACE_API_KEY);
         this.cache = CacheService.getInstance();
@@ -496,13 +500,15 @@ var init_HuggingFaceService = __esm({
 var AIService;
 var init_AIService = __esm({
   "server/services/AIService.ts"() {
-    "use strict";
     init_HuggingFaceService();
     init_CacheService();
     init_config();
     AIService = class {
+      hfService;
+      openai = null;
+      cache;
+      openaiAvailable;
       constructor() {
-        this.openai = null;
         this.hfService = new HuggingFaceService();
         this.cache = CacheService.getInstance();
         this.openaiAvailable = false;
@@ -675,18 +681,18 @@ Return a JSON object with this exact structure:
       /**
        * Generate personalized leaderboard insights
        */
-      async generateLeaderboardInsight(userId, analytics) {
+      async generateLeaderboardInsight(userId2, analytics) {
         if (!this.openai && config2.OPENAI_API_KEY && config2.OPENAI_API_KEY !== "") {
           await this.initializeOpenAI();
         }
-        const cacheKey = `ai:leaderboard-insight:${userId}`;
+        const cacheKey = `ai:leaderboard-insight:${userId2}`;
         const cached = await this.cache.get(cacheKey);
         if (cached) {
           return JSON.parse(cached);
         }
         try {
           if (this.openaiAvailable && this.openai) {
-            const prompt = this.buildLeaderboardInsightPrompt(userId, analytics);
+            const prompt = this.buildLeaderboardInsightPrompt(userId2, analytics);
             const completion = await this.openai.chat.completions.create({
               model: config2.OPENAI_MODEL || "gpt-4o-mini",
               messages: [
@@ -707,17 +713,17 @@ Return a JSON object with this exact structure:
             await this.cache.set(cacheKey, JSON.stringify(parsed), 3600);
             return parsed;
           } else {
-            return this.generateLeaderboardInsightFallback(userId, analytics);
+            return this.generateLeaderboardInsightFallback(userId2, analytics);
           }
         } catch (error) {
           console.error("Error generating leaderboard insight:", error);
-          return this.generateLeaderboardInsightFallback(userId, analytics);
+          return this.generateLeaderboardInsightFallback(userId2, analytics);
         }
       }
       /**
        * Build prompt for leaderboard insights
        */
-      buildLeaderboardInsightPrompt(userId, analytics) {
+      buildLeaderboardInsightPrompt(userId2, analytics) {
         let prompt = `Generate a personalized weekly summary for a user on a tipping platform.
 
 `;
@@ -779,7 +785,7 @@ Return a JSON object:
       /**
        * Fallback template-based leaderboard insights
        */
-      generateLeaderboardInsightFallback(userId, analytics) {
+      generateLeaderboardInsightFallback(userId2, analytics) {
         const insights = [];
         const recommendations = [];
         if (analytics.totalTips > 0) {
@@ -808,7 +814,7 @@ Return a JSON object:
       /**
        * Suggest badges based on user behavior
        */
-      async suggestBadges(userId, behavior) {
+      async suggestBadges(userId2, behavior) {
         const suggestions = [];
         if (behavior.tipCount >= 1 && behavior.tipCount < 5) {
           suggestions.push({
@@ -871,35 +877,36 @@ import axios from "axios";
 var VerychatService;
 var init_VerychatService = __esm({
   "server/services/VerychatService.ts"() {
-    "use strict";
     init_config();
     VerychatService = class {
+      baseUrl;
+      apiKey;
       constructor() {
         this.baseUrl = config2.VERYCHAT_API_URL || "https://api.verychat.io/v1";
         this.apiKey = config2.VERYCHAT_API_KEY || "";
       }
-      async getUser(userId) {
+      async getUser(userId2) {
         try {
-          const response = await axios.get(`${this.baseUrl}/users/${userId}`, {
+          const response = await axios.get(`${this.baseUrl}/users/${userId2}`, {
             headers: {
               "Authorization": `Bearer ${this.apiKey}`
             }
           });
           return response.data;
         } catch (error) {
-          console.error(`Error fetching user ${userId} from Verychat:`, error);
+          console.error(`Error fetching user ${userId2} from Verychat:`, error);
           if (!this.apiKey) {
             console.warn("Verychat API Key missing, using mock data");
-            if (userId === "userA") return { id: "userA", walletAddress: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8", publicKey: "mockPublicKeyA" };
-            if (userId === "userB") return { id: "userB", walletAddress: "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC", publicKey: "mockPublicKeyB" };
+            if (userId2 === "userA") return { id: "userA", walletAddress: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8", publicKey: "mockPublicKeyA" };
+            if (userId2 === "userB") return { id: "userB", walletAddress: "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC", publicKey: "mockPublicKeyB" };
           }
           return null;
         }
       }
-      async sendMessage(userId, message) {
+      async sendMessage(userId2, message) {
         try {
           await axios.post(`${this.baseUrl}/messages`, {
-            recipientId: userId,
+            recipientId: userId2,
             text: message
           }, {
             headers: {
@@ -908,7 +915,7 @@ var init_VerychatService = __esm({
           });
           return true;
         } catch (error) {
-          console.error(`Error sending message to user ${userId}:`, error);
+          console.error(`Error sending message to user ${userId2}:`, error);
           return false;
         }
       }
@@ -923,11 +930,11 @@ import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
 var IpfsService;
 var init_IpfsService = __esm({
   "server/services/IpfsService.ts"() {
-    "use strict";
     init_config();
     IpfsService = class {
+      client = null;
+      provider;
       constructor() {
-        this.client = null;
         const ipfsMode = (process.env.IPFS_MODE || "mock").toLowerCase();
         if (ipfsMode === "mock") {
           this.provider = "mock";
@@ -1199,8 +1206,8 @@ import { PrismaClient } from "@prisma/client";
 var DatabaseService;
 var init_DatabaseService = __esm({
   "server/services/DatabaseService.ts"() {
-    "use strict";
     DatabaseService = class _DatabaseService {
+      static instance;
       constructor() {
       }
       static getInstance() {
@@ -1219,13 +1226,13 @@ import IORedis from "ioredis";
 var connection, tipQueue, QueueService;
 var init_QueueService = __esm({
   "server/services/QueueService.ts"() {
-    "use strict";
     init_config();
     connection = new IORedis(config2.REDIS_URL || "redis://localhost:6379", {
       maxRetriesPerRequest: null
     });
     tipQueue = new Queue("tip-processing", { connection });
     QueueService = class {
+      worker;
       constructor(processCallback) {
         this.worker = new Worker("tip-processing", processCallback, {
           connection,
@@ -1255,14 +1262,11 @@ var init_QueueService = __esm({
 var TipAnalyticsService;
 var init_TipAnalyticsService = __esm({
   "server/services/TipAnalyticsService.ts"() {
-    "use strict";
     init_DatabaseService();
     init_CacheService();
     TipAnalyticsService = class {
-      constructor() {
-        this.db = DatabaseService.getInstance();
-        this.cache = CacheService.getInstance();
-      }
+      db = DatabaseService.getInstance();
+      cache = CacheService.getInstance();
       /**
        * Get overall platform statistics
        */
@@ -1304,8 +1308,8 @@ var init_TipAnalyticsService = __esm({
           tipperMap[tip.senderId].count++;
           tipperMap[tip.senderId].total += BigInt(tip.amount);
         });
-        const topTippers = Object.entries(tipperMap).map(([userId, stats2]) => ({
-          userId,
+        const topTippers = Object.entries(tipperMap).map(([userId2, stats2]) => ({
+          userId: userId2,
           count: stats2.count,
           totalAmount: stats2.total.toString()
         })).sort((a, b) => b.count - a.count).slice(0, 10);
@@ -1317,8 +1321,8 @@ var init_TipAnalyticsService = __esm({
           recipientMap[tip.recipientId].count++;
           recipientMap[tip.recipientId].total += BigInt(tip.amount);
         });
-        const topRecipients = Object.entries(recipientMap).map(([userId, stats2]) => ({
-          userId,
+        const topRecipients = Object.entries(recipientMap).map(([userId2, stats2]) => ({
+          userId: userId2,
           count: stats2.count,
           totalAmount: stats2.total.toString()
         })).sort((a, b) => b.count - a.count).slice(0, 10);
@@ -1362,20 +1366,20 @@ var init_TipAnalyticsService = __esm({
       /**
        * Get analytics for a specific user
        */
-      async getUserAnalytics(userId, useCache = true) {
-        const cacheKey = `analytics:user:${userId}`;
+      async getUserAnalytics(userId2, useCache = true) {
+        const cacheKey = `analytics:user:${userId2}`;
         if (useCache) {
           const cached = await this.cache.get(cacheKey);
           if (cached) return JSON.parse(cached);
         }
         const [sentTips, receivedTips] = await Promise.all([
           this.db.tip.findMany({
-            where: { senderId: userId, status: "CONFIRMED" },
+            where: { senderId: userId2, status: "CONFIRMED" },
             include: { recipient: true },
             orderBy: { createdAt: "desc" }
           }),
           this.db.tip.findMany({
-            where: { recipientId: userId, status: "CONFIRMED" },
+            where: { recipientId: userId2, status: "CONFIRMED" },
             include: { sender: true },
             orderBy: { createdAt: "desc" }
           })
@@ -1398,8 +1402,8 @@ var init_TipAnalyticsService = __esm({
           recipientMap[tip.recipientId].count++;
           recipientMap[tip.recipientId].total += BigInt(tip.amount);
         });
-        const favoriteRecipients = Object.entries(recipientMap).map(([userId2, stats]) => ({
-          userId: userId2,
+        const favoriteRecipients = Object.entries(recipientMap).map(([userId3, stats]) => ({
+          userId: userId3,
           count: stats.count,
           totalAmount: stats.total.toString()
         })).sort((a, b) => b.count - a.count).slice(0, 5);
@@ -1411,8 +1415,8 @@ var init_TipAnalyticsService = __esm({
           senderMap[tip.senderId].count++;
           senderMap[tip.senderId].total += BigInt(tip.amount);
         });
-        const favoriteSenders = Object.entries(senderMap).map(([userId2, stats]) => ({
-          userId: userId2,
+        const favoriteSenders = Object.entries(senderMap).map(([userId3, stats]) => ({
+          userId: userId3,
           count: stats.count,
           totalAmount: stats.total.toString()
         })).sort((a, b) => b.count - a.count).slice(0, 5);
@@ -1438,7 +1442,7 @@ var init_TipAnalyticsService = __esm({
           }
         }
         const analytics = {
-          userId,
+          userId: userId2,
           tipsSent: sentTips.length,
           tipsReceived: receivedTips.length,
           totalSent: totalSent.toString(),
@@ -1554,7 +1558,6 @@ import { z } from "zod";
 var BadgeSchema, BADGE_CATEGORIES, BADGE_RARITY_ORDER, BadgeEngine;
 var init_BadgeEngine = __esm({
   "server/services/BadgeEngine.ts"() {
-    "use strict";
     init_config();
     init_DatabaseService();
     BadgeSchema = z.object({
@@ -1605,12 +1608,12 @@ var init_BadgeEngine = __esm({
       diamond: 5
     };
     BadgeEngine = class {
+      db = DatabaseService.getInstance();
+      hf = null;
+      userStatsCache = /* @__PURE__ */ new Map();
+      CACHE_TTL = 5 * 60 * 1e3;
       // 5 minutes
       constructor() {
-        this.db = DatabaseService.getInstance();
-        this.hf = null;
-        this.userStatsCache = /* @__PURE__ */ new Map();
-        this.CACHE_TTL = 5 * 60 * 1e3;
         if (config2.HUGGINGFACE_API_KEY && config2.HUGGINGFACE_API_KEY !== "dummy_hf_key") {
           this.hf = new HfInference2(config2.HUGGINGFACE_API_KEY);
         }
@@ -1618,8 +1621,8 @@ var init_BadgeEngine = __esm({
       /**
        * Check all achievements for a user based on their tips
        */
-      async checkAllAchievements(userId, tips) {
-        const stats = await this.calculateStats(userId, tips);
+      async checkAllAchievements(userId2, tips) {
+        const stats = await this.calculateStats(userId2, tips);
         const badges = [];
         for (const category of Object.values(BADGE_CATEGORIES)) {
           for (const badgeDef of category) {
@@ -1650,12 +1653,12 @@ var init_BadgeEngine = __esm({
       /**
        * Calculate comprehensive user statistics
        */
-      async calculateStats(userId, tips) {
-        const cached = this.userStatsCache.get(userId);
+      async calculateStats(userId2, tips) {
+        const cached = this.userStatsCache.get(userId2);
         if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
           return cached.stats;
         }
-        const filteredTips = tips.filter((t) => t.senderId === userId);
+        const filteredTips = tips.filter((t) => t.senderId === userId2);
         let totalAmount = BigInt(0);
         const recipientMap = /* @__PURE__ */ new Map();
         let microTips = 0;
@@ -1697,7 +1700,7 @@ var init_BadgeEngine = __esm({
           earlyTips,
           lateTips
         };
-        this.userStatsCache.set(userId, { stats, timestamp: Date.now() });
+        this.userStatsCache.set(userId2, { stats, timestamp: Date.now() });
         return stats;
       }
       /**
@@ -1836,24 +1839,21 @@ var init_BadgeEngine = __esm({
 var BadgeService;
 var init_BadgeService = __esm({
   "server/services/BadgeService.ts"() {
-    "use strict";
     init_DatabaseService();
     init_BadgeEngine();
     init_TipAnalyticsService();
     BadgeService = class {
-      constructor() {
-        this.db = DatabaseService.getInstance();
-        this.badgeEngine = new BadgeEngine();
-        this.analyticsService = new TipAnalyticsService();
-      }
+      db = DatabaseService.getInstance();
+      badgeEngine = new BadgeEngine();
+      analyticsService = new TipAnalyticsService();
       /**
        * Check and award badges for a user
        * Returns newly awarded badges
        */
-      async checkAndAwardBadges(userId) {
+      async checkAndAwardBadges(userId2) {
         const tips = await this.db.tip.findMany({
           where: {
-            senderId: userId,
+            senderId: userId2,
             status: "CONFIRMED"
           },
           orderBy: {
@@ -1862,7 +1862,7 @@ var init_BadgeService = __esm({
         });
         const existingBadges = await this.db.userBadge.findMany({
           where: {
-            userId
+            userId: userId2
           },
           include: {
             badge: true
@@ -1878,7 +1878,7 @@ var init_BadgeService = __esm({
           createdAt: tip.createdAt,
           message: tip.messageHash
         }));
-        const qualifiedBadges = await this.badgeEngine.checkAllAchievements(userId, tipData);
+        const qualifiedBadges = await this.badgeEngine.checkAllAchievements(userId2, tipData);
         const newBadges = qualifiedBadges.filter((b) => !existingBadgeIds.has(b.name));
         const awardedBadges = [];
         for (const badge of newBadges) {
@@ -1886,7 +1886,7 @@ var init_BadgeService = __esm({
             const badgeRecord = await this.ensureBadgeExists(badge);
             await this.db.userBadge.create({
               data: {
-                userId,
+                userId: userId2,
                 badgeId: badgeRecord.id,
                 context: {
                   criteria: badge.criteria,
@@ -1898,7 +1898,7 @@ var init_BadgeService = __esm({
             awardedBadges.push(badge);
           } catch (error) {
             if (!error.message?.includes("Unique constraint") && error.code !== "P2002") {
-              console.error(`Error awarding badge ${badge.badgeId} to user ${userId}:`, error);
+              console.error(`Error awarding badge ${badge.badgeId} to user ${userId2}:`, error);
             }
           }
         }
@@ -1933,10 +1933,10 @@ var init_BadgeService = __esm({
       /**
        * Get all badges for a user
        */
-      async getUserBadges(userId) {
+      async getUserBadges(userId2) {
         const userBadges = await this.db.userBadge.findMany({
           where: {
-            userId
+            userId: userId2
           },
           include: {
             badge: true
@@ -1999,7 +1999,7 @@ var init_BadgeService = __esm({
       /**
        * Revoke a badge from a user (delete the UserBadge record)
        */
-      async revokeBadge(userId, badgeId) {
+      async revokeBadge(userId2, badgeId) {
         try {
           const badge = await this.db.badge.findUnique({
             where: { name: badgeId }
@@ -2009,21 +2009,21 @@ var init_BadgeService = __esm({
           }
           await this.db.userBadge.deleteMany({
             where: {
-              userId,
+              userId: userId2,
               badgeId: badge.id
             }
           });
           return true;
         } catch (error) {
-          console.error(`Error revoking badge ${badgeId} from user ${userId}:`, error);
+          console.error(`Error revoking badge ${badgeId} from user ${userId2}:`, error);
           return false;
         }
       }
       /**
        * Get badge statistics for a user
        */
-      async getUserBadgeStats(userId) {
-        const badges = await this.getUserBadges(userId);
+      async getUserBadgeStats(userId2) {
+        const badges = await this.getUserBadges(userId2);
         const rarityCounts = {
           bronze: 0,
           silver: 0,
@@ -2049,7 +2049,6 @@ import { ethers as ethers2 } from "ethers";
 var TipService;
 var init_TipService = __esm({
   "server/services/TipService.ts"() {
-    "use strict";
     init_BlockchainService();
     init_HuggingFaceService();
     init_AIService();
@@ -2061,8 +2060,16 @@ var init_TipService = __esm({
     init_BadgeService();
     init_config();
     TipService = class {
+      blockchainService;
+      hfService;
+      aiService;
+      verychatService;
+      ipfsService;
+      analyticsService;
+      badgeService;
+      db = DatabaseService.getInstance();
+      queueService;
       constructor() {
-        this.db = DatabaseService.getInstance();
         this.blockchainService = new BlockchainService();
         this.hfService = new HuggingFaceService();
         this.aiService = new AIService();
@@ -2496,7 +2503,6 @@ import { ethers as ethers4, Wallet as Wallet3, JsonRpcProvider as JsonRpcProvide
 var VERY_REWARDS_ABI, RewardActionType, REWARD_TABLE, RewardService;
 var init_RewardService = __esm({
   "server/services/RewardService.ts"() {
-    "use strict";
     init_config();
     VERY_REWARDS_ABI = [
       "function grantReward(address user, uint256 amount, string calldata reason, uint256 nonce, uint8 v, bytes32 r, bytes32 s) external",
@@ -2529,8 +2535,11 @@ var init_RewardService = __esm({
       // 10 VERY
     };
     RewardService = class {
+      provider;
+      rewardSigner;
+      rewardsContract = null;
+      rewardsContractAddress;
       constructor() {
-        this.rewardsContract = null;
         this.provider = new JsonRpcProvider3(config2.VERY_CHAIN_RPC_URL);
         const rewardSignerKey = process.env.REWARD_SIGNER_PRIVATE_KEY || config2.SPONSOR_PRIVATE_KEY;
         if (!rewardSignerKey || rewardSignerKey === "0x0000000000000000000000000000000000000000000000000000000000000001") {
@@ -2631,9 +2640,9 @@ var init_RewardService = __esm({
           throw new Error("VERY_REWARDS_CONTRACT_ADDRESS not configured");
         }
         const rewardHash = ethers4.keccak256(
-          ethers4.AbiCoder.defaultAbiCoder().encode(
+          ethers4.solidityPacked(
             ["address", "uint256", "string", "uint256", "address"],
-            [user, amount, reason, nonce, rewardsContractAddress]
+            [ethers4.getAddress(user), amount, reason, nonce, ethers4.getAddress(rewardsContractAddress)]
           )
         );
         const messageBytes = ethers4.getBytes(
@@ -2717,17 +2726,454 @@ var init_RewardService = __esm({
   }
 });
 
+// backend/src/utils/logger.ts
+var logger_exports = {};
+__export(logger_exports, {
+  default: () => logger_default,
+  logger: () => logger
+});
+import winston from "winston";
+var logLevel, logger, logger_default;
+var init_logger = __esm({
+  "backend/src/utils/logger.ts"() {
+    logLevel = process.env.LOG_LEVEL || "info";
+    logger = winston.createLogger({
+      level: logLevel,
+      format: winston.format.combine(
+        winston.format.timestamp(),
+        winston.format.errors({ stack: true }),
+        winston.format.json()
+      ),
+      defaultMeta: { service: "verytippers-backend" },
+      transports: [
+        new winston.transports.File({ filename: "logs/error.log", level: "error" }),
+        new winston.transports.File({ filename: "logs/combined.log" })
+      ]
+    });
+    if (process.env.NODE_ENV !== "production") {
+      logger.add(new winston.transports.Console({
+        format: winston.format.combine(
+          winston.format.colorize(),
+          winston.format.simple()
+        )
+      }));
+    }
+    logger_default = logger;
+  }
+});
+
+// backend/src/services/social/SocialService.ts
+var SocialService_exports = {};
+__export(SocialService_exports, {
+  SocialService: () => SocialService2
+});
+import { PrismaClient as PrismaClient4, ActivityType, NotificationType } from "@prisma/client";
+var SocialService2;
+var init_SocialService = __esm({
+  "backend/src/services/social/SocialService.ts"() {
+    SocialService2 = class {
+      db;
+      constructor(db) {
+        if (db) {
+          this.db = db;
+        } else {
+          try {
+            const { DatabaseService: DatabaseService2 } = __require("../../../server/services/DatabaseService");
+            this.db = DatabaseService2.getInstance();
+          } catch {
+            this.db = new PrismaClient4();
+          }
+        }
+      }
+      /**
+       * Follow a user
+       */
+      async followUser(followerId, followingId) {
+        if (followerId === followingId) {
+          return { success: false, message: "Cannot follow yourself" };
+        }
+        try {
+          const existing = await this.db.follow.findUnique({
+            where: {
+              followerId_followingId: {
+                followerId,
+                followingId
+              }
+            }
+          });
+          if (existing) {
+            return { success: false, message: "Already following this user" };
+          }
+          await this.db.follow.create({
+            data: {
+              followerId,
+              followingId
+            }
+          });
+          await Promise.all([
+            this.db.user.update({
+              where: { id: followerId },
+              data: { followingCount: { increment: 1 } }
+            }),
+            this.db.user.update({
+              where: { id: followingId },
+              data: { followersCount: { increment: 1 } }
+            })
+          ]);
+          await this.createActivity({
+            userId: followerId,
+            type: ActivityType.FOLLOWED,
+            title: "Started following",
+            description: `Now following user`,
+            metadata: { followingId },
+            isPublic: true
+          });
+          const follower = await this.db.user.findUnique({ where: { id: followerId } });
+          await this.createNotification({
+            userId: followingId,
+            type: NotificationType.NEW_FOLLOWER,
+            title: "New Follower",
+            message: `${follower?.username || follower?.displayName || "Someone"} started following you`,
+            metadata: { followerId }
+          });
+          return { success: true, message: "Successfully followed user" };
+        } catch (error) {
+          const { logger: logger2 } = (init_logger(), __toCommonJS(logger_exports));
+          logger2.error("Error following user", { error, userId, targetUserId });
+          return { success: false, message: error.message || "Failed to follow user" };
+        }
+      }
+      /**
+       * Unfollow a user
+       */
+      async unfollowUser(followerId, followingId) {
+        try {
+          const follow = await this.db.follow.findUnique({
+            where: {
+              followerId_followingId: {
+                followerId,
+                followingId
+              }
+            }
+          });
+          if (!follow) {
+            return { success: false, message: "Not following this user" };
+          }
+          await this.db.follow.delete({
+            where: { id: follow.id }
+          });
+          await Promise.all([
+            this.db.user.update({
+              where: { id: followerId },
+              data: { followingCount: { decrement: 1 } }
+            }),
+            this.db.user.update({
+              where: { id: followingId },
+              data: { followersCount: { decrement: 1 } }
+            })
+          ]);
+          return { success: true, message: "Successfully unfollowed user" };
+        } catch (error) {
+          const { logger: logger2 } = (init_logger(), __toCommonJS(logger_exports));
+          logger2.error("Error unfollowing user", { error, userId, targetUserId });
+          return { success: false, message: error.message || "Failed to unfollow user" };
+        }
+      }
+      /**
+       * Check if user A follows user B
+       */
+      async isFollowing(followerId, followingId) {
+        const follow = await this.db.follow.findUnique({
+          where: {
+            followerId_followingId: {
+              followerId,
+              followingId
+            }
+          }
+        });
+        return !!follow;
+      }
+      /**
+       * Get followers of a user
+       */
+      async getFollowers(userId2, limit = 50, offset = 0) {
+        const follows = await this.db.follow.findMany({
+          where: { followingId: userId2 },
+          include: {
+            follower: {
+              select: {
+                id: true,
+                username: true,
+                displayName: true,
+                avatarUrl: true,
+                bio: true,
+                isVerified: true,
+                followersCount: true,
+                followingCount: true
+              }
+            }
+          },
+          orderBy: { createdAt: "desc" },
+          take: limit,
+          skip: offset
+        });
+        return {
+          followers: follows.map((f) => f.follower),
+          total: await this.db.follow.count({ where: { followingId: userId2 } })
+        };
+      }
+      /**
+       * Get users that a user is following
+       */
+      async getFollowing(userId2, limit = 50, offset = 0) {
+        const follows = await this.db.follow.findMany({
+          where: { followerId: userId2 },
+          include: {
+            following: {
+              select: {
+                id: true,
+                username: true,
+                displayName: true,
+                avatarUrl: true,
+                bio: true,
+                isVerified: true,
+                followersCount: true,
+                followingCount: true
+              }
+            }
+          },
+          orderBy: { createdAt: "desc" },
+          take: limit,
+          skip: offset
+        });
+        return {
+          following: follows.map((f) => f.following),
+          total: await this.db.follow.count({ where: { followerId: userId2 } })
+        };
+      }
+      /**
+       * Create an activity
+       */
+      async createActivity(data) {
+        return this.db.activity.create({
+          data: {
+            userId: data.userId,
+            type: data.type,
+            title: data.title,
+            description: data.description,
+            metadata: data.metadata || {},
+            isPublic: data.isPublic !== false
+          }
+        });
+      }
+      /**
+       * Get activity feed for a user (from users they follow)
+       */
+      async getActivityFeed(userId2, limit = 20, offset = 0) {
+        const following = await this.db.follow.findMany({
+          where: { followerId: userId2 },
+          select: { followingId: true }
+        });
+        const followingIds = following.map((f) => f.followingId);
+        followingIds.push(userId2);
+        const activities = await this.db.activity.findMany({
+          where: {
+            userId: { in: followingIds },
+            isPublic: true
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                displayName: true,
+                avatarUrl: true
+              }
+            }
+          },
+          orderBy: { createdAt: "desc" },
+          take: limit,
+          skip: offset
+        });
+        return {
+          activities,
+          total: await this.db.activity.count({
+            where: {
+              userId: { in: followingIds },
+              isPublic: true
+            }
+          })
+        };
+      }
+      /**
+       * Get user's own activities
+       */
+      async getUserActivities(userId2, limit = 20, offset = 0) {
+        const activities = await this.db.activity.findMany({
+          where: { userId: userId2 },
+          orderBy: { createdAt: "desc" },
+          take: limit,
+          skip: offset
+        });
+        return {
+          activities,
+          total: await this.db.activity.count({ where: { userId: userId2 } })
+        };
+      }
+      /**
+       * Create a notification
+       */
+      async createNotification(data) {
+        return this.db.notification.create({
+          data: {
+            userId: data.userId,
+            type: data.type,
+            title: data.title,
+            message: data.message,
+            metadata: data.metadata || {}
+          }
+        });
+      }
+      /**
+       * Get user notifications
+       */
+      async getNotifications(userId2, limit = 20, offset = 0, unreadOnly = false) {
+        const where = { userId: userId2 };
+        if (unreadOnly) {
+          where.read = false;
+        }
+        const notifications = await this.db.notification.findMany({
+          where,
+          orderBy: { createdAt: "desc" },
+          take: limit,
+          skip: offset
+        });
+        return {
+          notifications,
+          total: await this.db.notification.count({ where }),
+          unreadCount: await this.db.notification.count({ where: { userId: userId2, read: false } })
+        };
+      }
+      /**
+       * Mark notification as read
+       */
+      async markNotificationRead(notificationId, userId2) {
+        return this.db.notification.updateMany({
+          where: {
+            id: notificationId,
+            userId: userId2
+          },
+          data: {
+            read: true,
+            readAt: /* @__PURE__ */ new Date()
+          }
+        });
+      }
+      /**
+       * Mark all notifications as read
+       */
+      async markAllNotificationsRead(userId2) {
+        return this.db.notification.updateMany({
+          where: {
+            userId: userId2,
+            read: false
+          },
+          data: {
+            read: true,
+            readAt: /* @__PURE__ */ new Date()
+          }
+        });
+      }
+      /**
+       * Extract mentions from text (@username)
+       */
+      extractMentions(text) {
+        const mentionRegex = /@(\w+)/g;
+        const mentions = [];
+        let match;
+        while ((match = mentionRegex.exec(text)) !== null) {
+          mentions.push(match[1]);
+        }
+        return [...new Set(mentions)];
+      }
+      /**
+       * Process mentions in a message and create notifications
+       */
+      async processMentions(text, context) {
+        const mentions = this.extractMentions(text);
+        if (mentions.length === 0) return;
+        const users = await this.db.user.findMany({
+          where: {
+            username: { in: mentions }
+          }
+        });
+        const sender = await this.db.user.findUnique({
+          where: { id: context.senderId },
+          select: { username: true, displayName: true }
+        });
+        const senderName = sender?.displayName || sender?.username || "Someone";
+        for (const user of users) {
+          await this.createNotification({
+            userId: user.id,
+            type: NotificationType.MENTION,
+            title: "You were mentioned",
+            message: `${senderName} mentioned you${context.message ? `: ${context.message}` : ""}`,
+            metadata: {
+              senderId: context.senderId,
+              tipId: context.tipId,
+              message: context.message
+            }
+          });
+        }
+      }
+      /**
+       * Get user profile with social stats
+       */
+      async getUserProfile(userId2) {
+        const user = await this.db.user.findUnique({
+          where: { id: userId2 },
+          include: {
+            badges: {
+              include: {
+                badge: true
+              },
+              take: 10,
+              orderBy: { earnedAt: "desc" }
+            },
+            _count: {
+              select: {
+                tipsSent: true,
+                tipsReceived: true,
+                badges: true
+              }
+            }
+          }
+        });
+        if (!user) return null;
+        return {
+          ...user,
+          stats: {
+            tipsSent: user._count.tipsSent,
+            tipsReceived: user._count.tipsReceived,
+            badges: user._count.badges
+          }
+        };
+      }
+    };
+  }
+});
+
 // server/services/OrchestratorService.ts
 import { ethers as ethers5 } from "ethers";
 var OrchestratorService;
 var init_OrchestratorService = __esm({
   "server/services/OrchestratorService.ts"() {
-    "use strict";
     init_IpfsService();
     init_DatabaseService();
     OrchestratorService = class {
+      ipfsService;
+      db = DatabaseService.getInstance();
       constructor() {
-        this.db = DatabaseService.getInstance();
         this.ipfsService = new IpfsService();
       }
       /**
@@ -2824,6 +3270,154 @@ var init_OrchestratorService = __esm({
   }
 });
 
+// backend/src/utils/circuitBreaker.ts
+var DEFAULT_OPTIONS, CircuitBreaker, circuitBreakers;
+var init_circuitBreaker = __esm({
+  "backend/src/utils/circuitBreaker.ts"() {
+    DEFAULT_OPTIONS = {
+      failureThreshold: 5,
+      resetTimeout: 6e4,
+      // 1 minute
+      monitoringPeriod: 6e4,
+      // 1 minute
+      halfOpenMaxCalls: 3
+    };
+    CircuitBreaker = class {
+      // Track failure timestamps
+      constructor(name, options = {}) {
+        this.name = name;
+        this.options = { ...DEFAULT_OPTIONS, ...options };
+      }
+      state = "CLOSED";
+      failureCount = 0;
+      lastFailureTime = null;
+      halfOpenCalls = 0;
+      options;
+      failures = [];
+      async execute(operation) {
+        this.updateState();
+        if (this.state === "OPEN") {
+          throw new Error(
+            `Circuit breaker "${this.name}" is OPEN. Service unavailable.`
+          );
+        }
+        try {
+          const result = await operation();
+          this.onSuccess();
+          return result;
+        } catch (error) {
+          this.onFailure();
+          throw error;
+        }
+      }
+      updateState() {
+        const now = Date.now();
+        while (this.failures.length > 0 && now - this.failures[0] > this.options.monitoringPeriod) {
+          this.failures.shift();
+        }
+        this.failureCount = this.failures.length;
+        switch (this.state) {
+          case "CLOSED":
+            if (this.failureCount >= this.options.failureThreshold) {
+              this.state = "OPEN";
+              this.lastFailureTime = now;
+              console.warn(
+                `Circuit breaker "${this.name}" opened after ${this.failureCount} failures`
+              );
+            }
+            break;
+          case "OPEN":
+            if (this.lastFailureTime && now - this.lastFailureTime >= this.options.resetTimeout) {
+              this.state = "HALF_OPEN";
+              this.halfOpenCalls = 0;
+              console.info(`Circuit breaker "${this.name}" moved to HALF_OPEN`);
+            }
+            break;
+          case "HALF_OPEN":
+            if (this.halfOpenCalls >= this.options.halfOpenMaxCalls) {
+              if (this.failureCount > 0) {
+                this.state = "OPEN";
+                this.lastFailureTime = now;
+                console.warn(
+                  `Circuit breaker "${this.name}" reopened after ${this.halfOpenCalls} calls`
+                );
+              }
+            }
+            break;
+        }
+      }
+      onSuccess() {
+        if (this.state === "HALF_OPEN") {
+          this.state = "CLOSED";
+          this.failureCount = 0;
+          this.failures.length = 0;
+          this.lastFailureTime = null;
+          this.halfOpenCalls = 0;
+          console.info(`Circuit breaker "${this.name}" closed after successful call`);
+        } else if (this.state === "CLOSED") {
+          this.failureCount = 0;
+          this.failures.length = 0;
+        }
+      }
+      onFailure() {
+        const now = Date.now();
+        this.failures.push(now);
+        this.lastFailureTime = now;
+        if (this.state === "HALF_OPEN") {
+          this.halfOpenCalls++;
+          this.state = "OPEN";
+          console.warn(
+            `Circuit breaker "${this.name}" reopened after failure in HALF_OPEN state`
+          );
+        }
+      }
+      getState() {
+        this.updateState();
+        return this.state;
+      }
+      getStats() {
+        this.updateState();
+        return {
+          name: this.name,
+          state: this.state,
+          failureCount: this.failureCount,
+          lastFailureTime: this.lastFailureTime,
+          halfOpenCalls: this.halfOpenCalls
+        };
+      }
+      reset() {
+        this.state = "CLOSED";
+        this.failureCount = 0;
+        this.failures.length = 0;
+        this.lastFailureTime = null;
+        this.halfOpenCalls = 0;
+        console.info(`Circuit breaker "${this.name}" manually reset`);
+      }
+    };
+    circuitBreakers = {
+      verychat: new CircuitBreaker("verychat-api", {
+        failureThreshold: 5,
+        resetTimeout: 3e4
+        // 30 seconds
+      }),
+      blockchain: new CircuitBreaker("blockchain-rpc", {
+        failureThreshold: 3,
+        resetTimeout: 6e4
+        // 1 minute
+      }),
+      ipfs: new CircuitBreaker("ipfs-service", {
+        failureThreshold: 5,
+        resetTimeout: 3e4
+      }),
+      database: new CircuitBreaker("database", {
+        failureThreshold: 10,
+        resetTimeout: 1e4
+        // 10 seconds
+      })
+    };
+  }
+});
+
 // server/integrations/verychat.ts
 var verychat_exports = {};
 __export(verychat_exports, {
@@ -2838,18 +3432,25 @@ async function handleVeryChatWebhook(req, res) {
 var VeryChatIntegration;
 var init_verychat = __esm({
   "server/integrations/verychat.ts"() {
-    "use strict";
     init_OrchestratorService();
     init_TipService();
     init_VerychatService();
     init_DatabaseService();
     init_config();
+    init_circuitBreaker();
     VeryChatIntegration = class {
+      orchestrator;
+      tipService;
+      verychatService;
+      socialService;
+      db = DatabaseService.getInstance();
       constructor() {
-        this.db = DatabaseService.getInstance();
         this.orchestrator = new OrchestratorService();
         this.tipService = new TipService();
         this.verychatService = new VerychatService();
+        const { DatabaseService: DatabaseService2 } = (init_DatabaseService(), __toCommonJS(DatabaseService_exports));
+        const db = DatabaseService2.getInstance();
+        this.socialService = new SocialService(db);
       }
       /**
        * Parse /tip command arguments
@@ -2874,34 +3475,79 @@ var init_verychat = __esm({
       /**
        * Handle VeryChat webhook
        * POST /webhook/verychat
+       * Enhanced with better error handling, retry logic, and command routing
        */
       async handleWebhook(req, res) {
-        try {
-          const payload = req.body;
-          if (config2.NODE_ENV === "production" && !this.verifyWebhookSignature(req)) {
-            res.status(401).json({ success: false, error: "Invalid signature" });
+        let retries = 0;
+        const maxRetries = 3;
+        while (retries <= maxRetries) {
+          try {
+            const payload = req.body;
+            if (config2.NODE_ENV === "production" && !this.verifyWebhookSignature(req)) {
+              res.status(401).json({ success: false, error: "Invalid signature" });
+              return;
+            }
+            if (payload.type === "command" || payload.message?.startsWith("/")) {
+              const commandText = payload.command ? `/${payload.command}${payload.args ? " " + payload.args : ""}` : payload.message || "";
+              const result = await this.commandHandler.handleCommand(
+                commandText,
+                {
+                  userId: payload.user,
+                  chatId: payload.channel || payload.user,
+                  args: payload.args || payload.message?.replace(/^\/\w+\s*/, "")
+                }
+              );
+              if (result.success) {
+                await circuitBreakers.verychat.execute(async () => {
+                  await this.verychatService.sendMessage(
+                    payload.channel || payload.user,
+                    result.message
+                  );
+                });
+              }
+              res.status(200).json({
+                success: result.success,
+                message: result.message,
+                data: result.data
+              });
+              return;
+            }
+            if (payload.type === "message" && payload.message?.startsWith("/tip")) {
+              const args = payload.message.replace("/tip", "").trim();
+              await this.handleTipCommand({ ...payload, command: "/tip", args }, res);
+              return;
+            }
+            res.status(200).json({
+              success: true,
+              message: "Webhook received",
+              handled: false
+            });
             return;
+          } catch (error) {
+            retries++;
+            console.error(`VeryChat webhook error (attempt ${retries}/${maxRetries}):`, error);
+            const isRetryable = this.isRetryableError(error);
+            if (!isRetryable || retries > maxRetries) {
+              try {
+                const payload = req.body;
+                await circuitBreakers.verychat.execute(async () => {
+                  await this.verychatService.sendMessage(
+                    payload.channel || payload.user,
+                    "\u274C An error occurred processing your request. Please try again later."
+                  );
+                });
+              } catch (notifError) {
+                console.error("Failed to send error notification:", notifError);
+              }
+              res.status(500).json({
+                success: false,
+                error: error.message || "Internal server error",
+                retries
+              });
+              return;
+            }
+            await new Promise((resolve) => setTimeout(resolve, Math.pow(2, retries) * 1e3));
           }
-          if (payload.type === "command" && payload.command === "/tip") {
-            await this.handleTipCommand(payload, res);
-            return;
-          }
-          if (payload.type === "message" && payload.message?.startsWith("/tip")) {
-            const args = payload.message.replace("/tip", "").trim();
-            await this.handleTipCommand({ ...payload, command: "/tip", args }, res);
-            return;
-          }
-          res.status(200).json({
-            success: true,
-            message: "Webhook received",
-            handled: false
-          });
-        } catch (error) {
-          console.error("VeryChat webhook error:", error);
-          res.status(500).json({
-            success: false,
-            error: error.message || "Internal server error"
-          });
         }
       }
       /**
@@ -2951,6 +3597,35 @@ var init_verychat = __esm({
           nonce
         };
         const preview = await this.orchestrator.createTipDraft(draft);
+        if (parsed.message) {
+          await this.socialService.processMentions(parsed.message, {
+            senderId: sender.id,
+            message: parsed.message
+          });
+        }
+        await this.socialService.createActivity({
+          userId: sender.id,
+          type: "TIP_SENT",
+          title: "Sent a tip",
+          description: `Sent ${parsed.amount} VERY to ${recipient.username || recipient.id}`,
+          metadata: {
+            recipientId: recipient.id,
+            amount: parsed.amount,
+            tipId: preview.cid
+          },
+          isPublic: true
+        });
+        await this.socialService.createNotification({
+          userId: recipient.id,
+          type: "TIP_RECEIVED",
+          title: "Tip Received",
+          message: `${sender.username || sender.displayName || "Someone"} sent you ${parsed.amount} VERY${parsed.message ? `: ${parsed.message}` : ""}`,
+          metadata: {
+            senderId: sender.id,
+            amount: parsed.amount,
+            tipId: preview.cid
+          }
+        });
         res.status(200).json({
           success: true,
           preview: {
@@ -2962,6 +3637,295 @@ var init_verychat = __esm({
           },
           walletPayload: preview.walletPayload,
           message: `Tip preview: ${parsed.amount} VERY to ${parsed.recipient}`
+        });
+      }
+      /**
+       * Handle /stats command
+       */
+      async handleStatsCommand(payload, res) {
+        const user = await this.getOrCreateUser(payload.user);
+        if (!user) {
+          res.status(400).json({ success: false, error: "User not found" });
+          return;
+        }
+        const stats = {
+          tipsSent: user.totalTipsSent.toString(),
+          tipsReceived: user.totalTipsReceived.toString(),
+          uniqueUsersTipped: user.uniqueUsersTipped,
+          tipStreak: user.tipStreak,
+          followers: user.followersCount || 0,
+          following: user.followingCount || 0
+        };
+        res.status(200).json({
+          success: true,
+          message: `\u{1F4CA} Your Stats:
+
+\u{1F4B0} Tips Sent: ${stats.tipsSent}
+\u{1F4B5} Tips Received: ${stats.tipsReceived}
+\u{1F465} Unique Users Tipped: ${stats.uniqueUsersTipped}
+\u{1F525} Tip Streak: ${stats.tipStreak} days
+\u{1F464} Followers: ${stats.followers}
+\u27A1\uFE0F Following: ${stats.following}`
+        });
+      }
+      /**
+       * Handle /profile command
+       */
+      async handleProfileCommand(payload, res) {
+        const args = payload.args?.trim();
+        let targetUserId2 = payload.user;
+        if (args) {
+          const username = args.replace("@", "");
+          const targetUser = await this.db.user.findUnique({
+            where: { username }
+          });
+          if (targetUser) {
+            targetUserId2 = targetUser.id;
+          }
+        }
+        const profile = await this.socialService.getUserProfile(targetUserId2);
+        if (!profile) {
+          res.status(404).json({ success: false, error: "User not found" });
+          return;
+        }
+        const isOwnProfile = targetUserId2 === payload.user;
+        const message = `${isOwnProfile ? "\u{1F464} Your Profile" : `\u{1F464} ${profile.username || profile.displayName || "User"}'s Profile`}
+
+${profile.bio || "No bio set"}
+
+\u{1F4B0} Tips Sent: ${profile.totalTipsSent.toString()}
+\u{1F4B5} Tips Received: ${profile.totalTipsReceived.toString()}
+\u{1F465} Followers: ${profile.followersCount || 0}
+\u27A1\uFE0F Following: ${profile.followingCount || 0}
+\u{1F3C6} Badges: ${profile.badges?.length || 0}`;
+        res.status(200).json({
+          success: true,
+          message,
+          profile: {
+            username: profile.username,
+            displayName: profile.displayName,
+            bio: profile.bio,
+            avatarUrl: profile.avatarUrl,
+            followersCount: profile.followersCount,
+            followingCount: profile.followingCount
+          }
+        });
+      }
+      /**
+       * Handle /follow command
+       */
+      async handleFollowCommand(payload, res) {
+        if (!payload.args) {
+          res.status(400).json({ success: false, error: "Usage: /follow @username" });
+          return;
+        }
+        const username = payload.args.trim().replace("@", "");
+        const targetUser = await this.db.user.findUnique({ where: { username } });
+        if (!targetUser) {
+          res.status(404).json({ success: false, error: `User @${username} not found` });
+          return;
+        }
+        const user = await this.getOrCreateUser(payload.user);
+        if (!user) {
+          res.status(400).json({ success: false, error: "User not found" });
+          return;
+        }
+        const result = await this.socialService.followUser(user.id, targetUser.id);
+        res.status(result.success ? 200 : 400).json(result);
+      }
+      /**
+       * Handle /unfollow command
+       */
+      async handleUnfollowCommand(payload, res) {
+        if (!payload.args) {
+          res.status(400).json({ success: false, error: "Usage: /unfollow @username" });
+          return;
+        }
+        const username = payload.args.trim().replace("@", "");
+        const targetUser = await this.db.user.findUnique({ where: { username } });
+        if (!targetUser) {
+          res.status(404).json({ success: false, error: `User @${username} not found` });
+          return;
+        }
+        const user = await this.getOrCreateUser(payload.user);
+        if (!user) {
+          res.status(400).json({ success: false, error: "User not found" });
+          return;
+        }
+        const result = await this.socialService.unfollowUser(user.id, targetUser.id);
+        res.status(result.success ? 200 : 400).json(result);
+      }
+      /**
+       * Handle /feed command
+       */
+      async handleFeedCommand(payload, res) {
+        const user = await this.getOrCreateUser(payload.user);
+        if (!user) {
+          res.status(400).json({ success: false, error: "User not found" });
+          return;
+        }
+        const feed = await this.socialService.getActivityFeed(user.id, 10);
+        if (feed.activities.length === 0) {
+          res.status(200).json({
+            success: true,
+            message: "\u{1F4ED} Your feed is empty. Follow some users to see their activity!"
+          });
+          return;
+        }
+        const feedText = feed.activities.map((activity) => {
+          const username = activity.user?.username || activity.user?.displayName || "Unknown";
+          return `\u2022 ${username}: ${activity.title}${activity.description ? ` - ${activity.description}` : ""}`;
+        }).join("\n");
+        res.status(200).json({
+          success: true,
+          message: `\u{1F4F0} Activity Feed:
+
+${feedText}`,
+          activities: feed.activities
+        });
+      }
+      /**
+       * Handle /leaderboard command
+       */
+      async handleLeaderboardCommand(payload, res) {
+        const topUsers = await this.db.user.findMany({
+          orderBy: { totalTipsSent: "desc" },
+          take: 10,
+          select: {
+            username: true,
+            displayName: true,
+            totalTipsSent: true
+          }
+        });
+        const leaderboard = topUsers.map((user, index) => {
+          const medal = index === 0 ? "\u{1F947}" : index === 1 ? "\u{1F948}" : index === 2 ? "\u{1F949}" : `${index + 1}.`;
+          return `${medal} ${user.username || user.displayName || "Unknown"}: ${user.totalTipsSent.toString()} VERY`;
+        }).join("\n");
+        res.status(200).json({
+          success: true,
+          message: `\u{1F3C6} Top Tippers:
+
+${leaderboard}`
+        });
+      }
+      /**
+       * Handle /badges command
+       */
+      async handleBadgesCommand(payload, res) {
+        const user = await this.getOrCreateUser(payload.user);
+        if (!user) {
+          res.status(400).json({ success: false, error: "User not found" });
+          return;
+        }
+        const badges = await this.db.userBadge.findMany({
+          where: { userId: user.id },
+          include: { badge: true },
+          orderBy: { earnedAt: "desc" },
+          take: 10
+        });
+        if (badges.length === 0) {
+          res.status(200).json({
+            success: true,
+            message: "\u{1F3C5} You haven't earned any badges yet. Keep tipping to earn badges!"
+          });
+          return;
+        }
+        const badgesText = badges.map((ub) => `\u{1F3C5} ${ub.badge.name}: ${ub.badge.description}`).join("\n");
+        res.status(200).json({
+          success: true,
+          message: `\u{1F3C5} Your Badges:
+
+${badgesText}`
+        });
+      }
+      /**
+       * Handle /notifications command
+       */
+      async handleNotificationsCommand(payload, res) {
+        const user = await this.getOrCreateUser(payload.user);
+        if (!user) {
+          res.status(400).json({ success: false, error: "User not found" });
+          return;
+        }
+        const { notifications, unreadCount } = await this.socialService.getNotifications(user.id, 10, 0, true);
+        if (notifications.length === 0) {
+          res.status(200).json({
+            success: true,
+            message: "\u{1F514} No new notifications"
+          });
+          return;
+        }
+        const notificationsText = notifications.map((n) => {
+          const icon = n.type === "TIP_RECEIVED" ? "\u{1F4B0}" : n.type === "NEW_FOLLOWER" ? "\u{1F464}" : n.type === "MENTION" ? "\u{1F4AC}" : n.type === "BADGE_EARNED" ? "\u{1F3C5}" : "\u{1F514}";
+          return `${icon} ${n.title}: ${n.message}`;
+        }).join("\n");
+        res.status(200).json({
+          success: true,
+          message: `\u{1F514} Notifications (${unreadCount} unread):
+
+${notificationsText}`
+        });
+      }
+      /**
+       * Handle /search command
+       */
+      async handleSearchCommand(payload, res) {
+        if (!payload.args) {
+          res.status(400).json({ success: false, error: "Usage: /search username" });
+          return;
+        }
+        const query = payload.args.trim();
+        const users = await this.db.user.findMany({
+          where: {
+            OR: [
+              { username: { contains: query, mode: "insensitive" } },
+              { displayName: { contains: query, mode: "insensitive" } }
+            ]
+          },
+          take: 10,
+          select: {
+            username: true,
+            displayName: true,
+            avatarUrl: true,
+            bio: true
+          }
+        });
+        if (users.length === 0) {
+          res.status(200).json({
+            success: true,
+            message: `\u{1F50D} No users found matching "${query}"`
+          });
+          return;
+        }
+        const usersText = users.map((u) => `\u2022 @${u.username || u.displayName || "unknown"}: ${u.bio || "No bio"}`).join("\n");
+        res.status(200).json({
+          success: true,
+          message: `\u{1F50D} Search Results:
+
+${usersText}`,
+          users
+        });
+      }
+      /**
+       * Handle /help command
+       */
+      async handleHelpCommand(payload, res) {
+        const helpText = `\u{1F4DA} VeryTippers Bot Commands:
+
+\u{1F4B0} /tip @username amount [message] - Send a tip
+\u{1F4CA} /stats - View your tipping statistics
+\u{1F464} /profile [@username] - View profile
+\u2795 /follow @username - Follow a user
+\u2796 /unfollow @username - Unfollow a user
+\u{1F4F0} /feed - View activity feed
+\u{1F3C6} /leaderboard - View top tippers
+\u{1F3C5} /badges - View your badges
+\u{1F514} /notifications - View notifications
+\u{1F50D} /search username - Search for users
+\u2753 /help - Show this help message`;
+        res.status(200).json({
+          success: true,
+          message: helpText
         });
       }
       /**
@@ -3022,8 +3986,11 @@ init_HuggingFaceService();
 init_IpfsService();
 init_TipService();
 var ContentService = class {
+  db = DatabaseService.getInstance();
+  hfService;
+  ipfsService;
+  tipService;
   constructor() {
-    this.db = DatabaseService.getInstance();
     this.hfService = new HuggingFaceService();
     this.ipfsService = new IpfsService();
     this.tipService = new TipService();
@@ -3107,7 +4074,7 @@ var ContentService = class {
   /**
    * Record content view
    */
-  async recordView(contentId, userId) {
+  async recordView(contentId, userId2) {
     console.warn("Content model not yet implemented - view recording skipped");
   }
   /**
@@ -3148,7 +4115,7 @@ var ContentService = class {
   /**
    * Check if user has access to premium content
    */
-  async hasAccessToContent(userId, contentId) {
+  async hasAccessToContent(userId2, contentId) {
     return false;
   }
 };
@@ -3166,9 +4133,10 @@ var TipSuggestionSchema = z2.object({
   category: z2.enum(["help", "content", "insight", "shoutout"]).describe("Tip category")
 });
 var AITipSuggestionService = class {
+  openai = null;
+  cache;
+  openaiAvailable = false;
   constructor() {
-    this.openai = null;
-    this.openaiAvailable = false;
     this.cache = CacheService.getInstance();
     this.openaiAvailable = false;
     this.openai = null;
@@ -3336,11 +4304,11 @@ var InsightSchema = z3.object({
   shareable: z3.boolean()
 });
 var LeaderboardInsightsService = class {
+  db = DatabaseService.getInstance();
+  cache = CacheService.getInstance();
+  openai = null;
+  openaiAvailable = false;
   constructor() {
-    this.db = DatabaseService.getInstance();
-    this.cache = CacheService.getInstance();
-    this.openai = null;
-    this.openaiAvailable = false;
     this.initializeOpenAI();
   }
   async initializeOpenAI() {
@@ -3520,12 +4488,12 @@ Generate 3-5 personalized insights (most important first). Return ONLY valid JSO
   /**
    * Fetch leaderboard data for a user
    */
-  async fetchLeaderboardData(userId, period = "weekly") {
+  async fetchLeaderboardData(userId2, period = "weekly") {
     const db = this.db;
     const startDate = this.getPeriodStartDate(period);
     const tipsSent = await db.tip.findMany({
       where: {
-        senderId: userId,
+        senderId: userId2,
         status: "CONFIRMED",
         createdAt: { gte: startDate }
       },
@@ -3533,7 +4501,7 @@ Generate 3-5 personalized insights (most important first). Return ONLY valid JSO
     });
     const tipsReceived = await db.tip.findMany({
       where: {
-        recipientId: userId,
+        recipientId: userId2,
         status: "CONFIRMED",
         createdAt: { gte: startDate }
       }
@@ -3581,8 +4549,8 @@ Generate 3-5 personalized insights (most important first). Return ONLY valid JSO
       existing.amount += BigInt(tip.amount);
       userStatsMap.set(tip.senderId, existing);
     });
-    const sortedUsers = Array.from(userStatsMap.entries()).map(([userId2, stats]) => ({
-      userId: userId2,
+    const sortedUsers = Array.from(userStatsMap.entries()).map(([userId3, stats]) => ({
+      userId: userId3,
       tips: stats.tips,
       amount: stats.amount
     })).sort((a, b) => {
@@ -3591,7 +4559,7 @@ Generate 3-5 personalized insights (most important first). Return ONLY valid JSO
       }
       return b.tips - a.tips;
     });
-    const userRankIndex = sortedUsers.findIndex((u) => u.userId === userId);
+    const userRankIndex = sortedUsers.findIndex((u) => u.userId === userId2);
     const rank = userRankIndex >= 0 ? userRankIndex + 1 : sortedUsers.length + 1;
     const weeklyGrowth = 0;
     const badges = [];
@@ -3655,6 +4623,7 @@ var MODERATION_THRESHOLDS = {
   negativeSentiment: 0.75
 };
 var ModerationService = class {
+  hf;
   constructor() {
     this.hf = new HfInference3(config2.HUGGINGFACE_API_KEY);
   }
@@ -3822,6 +4791,7 @@ import { PrismaClient as PrismaClient2 } from "@prisma/client";
 var prisma = new PrismaClient2();
 var hf = new HfInference4(config2.HUGGINGFACE_API_KEY);
 var ModerationPipeline = class {
+  moderationService;
   constructor() {
     this.moderationService = new ModerationService();
   }
@@ -4115,9 +5085,12 @@ var ERC721_ABI = [
   "function setApprovalForAll(address operator, bool approved) external"
 ];
 var NFTService = class {
+  provider;
+  relayerWallet;
+  ipfsService;
+  nftContract = null;
+  marketplaceContract = null;
   constructor() {
-    this.nftContract = null;
-    this.marketplaceContract = null;
     this.provider = new JsonRpcProvider2(config2.VERY_CHAIN_RPC_URL);
     this.relayerWallet = new Wallet2(config2.SPONSOR_PRIVATE_KEY, this.provider);
     this.ipfsService = new IpfsService();
@@ -4373,8 +5346,9 @@ init_DatabaseService();
 init_HuggingFaceService();
 import { createHash } from "crypto";
 var AdsService = class {
+  prisma = DatabaseService.getInstance();
+  hfService;
   constructor() {
-    this.prisma = DatabaseService.getInstance();
     this.hfService = new HuggingFaceService();
   }
   /**
@@ -4450,11 +5424,11 @@ var AdsService = class {
    */
   async recordImpression(request) {
     try {
-      const { adId, userId, ipHash } = request;
+      const { adId, userId: userId2, ipHash } = request;
       await this.prisma.adImpression.create({
         data: {
           adId,
-          userId: userId || null,
+          userId: userId2 || null,
           ipHash: ipHash || null
         }
       });
@@ -4475,7 +5449,7 @@ var AdsService = class {
    */
   async recordClick(request) {
     try {
-      const { adId, userId, ipHash } = request;
+      const { adId, userId: userId2, ipHash } = request;
       const ad = await this.prisma.ad.findUnique({
         where: { id: adId }
       });
@@ -4485,7 +5459,7 @@ var AdsService = class {
       await this.prisma.adClick.create({
         data: {
           adId,
-          userId: userId || null,
+          userId: userId2 || null,
           ipHash: ipHash || null
         }
       });
@@ -4610,7 +5584,7 @@ router.get("/slot", async (req, res) => {
 });
 router.post("/impression", async (req, res) => {
   try {
-    const { adId, userId, ipHash } = req.body;
+    const { adId, userId: userId2, ipHash } = req.body;
     if (!adId) {
       return res.status(400).json({
         success: false,
@@ -4621,7 +5595,7 @@ router.post("/impression", async (req, res) => {
     const finalIPHash = ipHash || (clientIP ? adsService.getIPHash(clientIP) : void 0);
     const success = await adsService.recordImpression({
       adId,
-      userId: userId || void 0,
+      userId: userId2 || void 0,
       ipHash: finalIPHash
     });
     if (success) {
@@ -4642,7 +5616,7 @@ router.post("/impression", async (req, res) => {
 });
 router.post("/click", async (req, res) => {
   try {
-    const { adId, userId, ipHash } = req.body;
+    const { adId, userId: userId2, ipHash } = req.body;
     if (!adId) {
       return res.status(400).json({
         success: false,
@@ -4653,7 +5627,7 @@ router.post("/click", async (req, res) => {
     const finalIPHash = ipHash || (clientIP ? adsService.getIPHash(clientIP) : void 0);
     const redirectUrl = await adsService.recordClick({
       adId,
-      userId: userId || void 0,
+      userId: userId2 || void 0,
       ipHash: finalIPHash
     });
     if (!redirectUrl) {
@@ -4847,8 +5821,8 @@ try {
 }
 router3.post("/stripe-create-session", async (req, res) => {
   try {
-    const { userId, credits, success_url, cancel_url } = req.body;
-    if (!userId || !credits || credits <= 0) {
+    const { userId: userId2, credits, success_url, cancel_url } = req.body;
+    if (!userId2 || !credits || credits <= 0) {
       return res.status(400).json({ error: "userId and credits (positive number) are required" });
     }
     const amountCents = Math.round(Number(credits) * 100 / 100);
@@ -4872,12 +5846,12 @@ router3.post("/stripe-create-session", async (req, res) => {
       success_url: success_url || `${req.headers.origin || "http://localhost:5173"}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: cancel_url || `${req.headers.origin || "http://localhost:5173"}/checkout/cancel`,
       metadata: {
-        userId: String(userId),
+        userId: String(userId2),
         credits: String(credits)
       }
     });
     const { error: orderError } = await supabase2.from("orders").insert({
-      user_id: userId,
+      user_id: userId2,
       amount_cents: amountCents,
       credits: Number(credits),
       stripe_session_id: session.id,
@@ -4913,9 +5887,9 @@ router3.post("/stripe-webhook", async (req, res) => {
   }
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
-    const userId = session.metadata?.userId;
+    const userId2 = session.metadata?.userId;
     const credits = Number(session.metadata?.credits) || 0;
-    if (!userId || !credits) {
+    if (!userId2 || !credits) {
       console.error("Missing userId or credits in session metadata");
       return res.status(400).json({ error: "Invalid session metadata" });
     }
@@ -4924,19 +5898,19 @@ router3.post("/stripe-webhook", async (req, res) => {
       if (updateError) {
         console.error("Error updating order:", updateError);
       }
-      const { data: existing } = await supabase2.from("balances").select("*").eq("user_id", userId).single();
+      const { data: existing } = await supabase2.from("balances").select("*").eq("user_id", userId2).single();
       if (existing) {
         const { error: balanceError } = await supabase2.from("balances").update({
           credits: Number(existing.credits) + credits,
           updated_at: (/* @__PURE__ */ new Date()).toISOString()
-        }).eq("user_id", userId);
+        }).eq("user_id", userId2);
         if (balanceError) {
           console.error("Error updating balance:", balanceError);
           return res.status(500).json({ error: "Failed to credit balance" });
         }
       } else {
         const { error: insertError } = await supabase2.from("balances").insert({
-          user_id: userId,
+          user_id: userId2,
           credits,
           created_at: (/* @__PURE__ */ new Date()).toISOString(),
           updated_at: (/* @__PURE__ */ new Date()).toISOString()
@@ -4946,7 +5920,7 @@ router3.post("/stripe-webhook", async (req, res) => {
           return res.status(500).json({ error: "Failed to create balance" });
         }
       }
-      console.log(`\u2705 Credited ${credits} credits to user ${userId}`);
+      console.log(`\u2705 Credited ${credits} credits to user ${userId2}`);
     } catch (err) {
       console.error("Error processing webhook:", err);
       return res.status(500).json({ error: err.message });
@@ -4956,11 +5930,11 @@ router3.post("/stripe-webhook", async (req, res) => {
 });
 router3.post("/create-meta-tx", async (req, res) => {
   try {
-    const { userId, toAddress, amount, cid, nonceHint, fromAddress, signature } = req.body;
-    if (!userId || !toAddress || !amount || amount <= 0) {
+    const { userId: userId2, toAddress, amount, cid, nonceHint, fromAddress, signature } = req.body;
+    if (!userId2 || !toAddress || !amount || amount <= 0) {
       return res.status(400).json({ error: "userId, toAddress, and amount (positive) are required" });
     }
-    const { data: balance, error: balanceError } = await supabase2.from("balances").select("*").eq("user_id", userId).single();
+    const { data: balance, error: balanceError } = await supabase2.from("balances").select("*").eq("user_id", userId2).single();
     if (balanceError || !balance) {
       return res.status(404).json({ error: "User balance not found" });
     }
@@ -4975,14 +5949,14 @@ router3.post("/create-meta-tx", async (req, res) => {
     const { error: updateError } = await supabase2.from("balances").update({
       credits: newCredits,
       updated_at: (/* @__PURE__ */ new Date()).toISOString()
-    }).eq("user_id", userId);
+    }).eq("user_id", userId2);
     if (updateError) {
       console.error("Error decrementing credits:", updateError);
       return res.status(500).json({ error: "Failed to debit credits" });
     }
     const nonce = nonceHint || Math.floor(Date.now() / 1e3);
     const { data: queueData, error: queueError } = await supabase2.from("meta_tx_queue").insert({
-      user_id: userId,
+      user_id: userId2,
       to_address: toAddress,
       amount: Number(amount),
       cid: cid || null,
@@ -4996,7 +5970,7 @@ router3.post("/create-meta-tx", async (req, res) => {
     }).select().single();
     if (queueError) {
       console.error("Error enqueueing meta-tx:", queueError);
-      await supabase2.from("balances").update({ credits: balance.credits, updated_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("user_id", userId);
+      await supabase2.from("balances").update({ credits: balance.credits, updated_at: (/* @__PURE__ */ new Date()).toISOString() }).eq("user_id", userId2);
       return res.status(500).json({ error: "Failed to enqueue meta-tx" });
     }
     if (redis) {
@@ -5017,10 +5991,10 @@ router3.post("/create-meta-tx", async (req, res) => {
 });
 router3.get("/balance/:userId", async (req, res) => {
   try {
-    const { userId } = req.params;
-    const { data, error } = await supabase2.from("balances").select("*").eq("user_id", userId).single();
+    const { userId: userId2 } = req.params;
+    const { data, error } = await supabase2.from("balances").select("*").eq("user_id", userId2).single();
     if (error || !data) {
-      return res.json({ credits: 0, userId });
+      return res.json({ credits: 0, userId: userId2 });
     }
     res.json({ credits: data.credits, userId: data.user_id });
   } catch (error) {
@@ -5030,8 +6004,8 @@ router3.get("/balance/:userId", async (req, res) => {
 });
 router3.get("/orders/:userId", async (req, res) => {
   try {
-    const { userId } = req.params;
-    const { data, error } = await supabase2.from("orders").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(50);
+    const { userId: userId2 } = req.params;
+    const { data, error } = await supabase2.from("orders").select("*").eq("user_id", userId2).order("created_at", { ascending: false }).limit(50);
     if (error) {
       return res.status(500).json({ error: error.message });
     }
@@ -5157,6 +6131,66 @@ router4.get("/table", async (req, res) => {
 });
 var rewards_default = router4;
 
+// server/utils/errors.ts
+var AppError = class extends Error {
+  code;
+  statusCode;
+  context;
+  timestamp;
+  constructor(code, message, statusCode = 500, context = {}) {
+    super(message);
+    this.name = this.constructor.name;
+    this.code = code;
+    this.statusCode = statusCode;
+    this.context = context;
+    this.timestamp = (/* @__PURE__ */ new Date()).toISOString();
+    Error.captureStackTrace(this, this.constructor);
+  }
+  toJSON() {
+    return {
+      success: false,
+      error: {
+        code: this.code,
+        message: this.message,
+        timestamp: this.timestamp,
+        ...process.env.NODE_ENV === "development" && { context: this.context }
+      }
+    };
+  }
+};
+var ValidationError = class extends AppError {
+  constructor(message, context = {}) {
+    super("VALIDATION_ERROR" /* VALIDATION_ERROR */, message, 400, context);
+  }
+};
+var asyncHandler = (fn) => {
+  return (req, res, next) => {
+    Promise.resolve(fn(req, res, next)).catch(next);
+  };
+};
+var errorHandler = (err, req, res, next) => {
+  const appError = err instanceof AppError ? err : new AppError(
+    "INTERNAL_SERVER_ERROR" /* INTERNAL_SERVER_ERROR */,
+    err instanceof Error ? err.message : "An unexpected error occurred",
+    500,
+    {
+      path: req.path,
+      method: req.method,
+      originalError: err instanceof Error ? err.message : String(err)
+    }
+  );
+  console.error("Error occurred:", {
+    code: appError.code,
+    message: appError.message,
+    statusCode: appError.statusCode,
+    path: req.path,
+    method: req.method,
+    stack: appError.stack,
+    context: appError.context
+  });
+  res.status(appError.statusCode).json(appError.toJSON());
+};
+
 // server/index.ts
 var __filename2 = fileURLToPath2(import.meta.url);
 var __dirname2 = path2.dirname(__filename2);
@@ -5182,6 +6216,7 @@ async function startServer() {
   app.use("/api", indexerWebhook_default);
   app.use("/api/checkout", checkout_default);
   app.use("/api/rewards", rewards_default);
+  app.use(errorHandler);
   app.get("/health", (_req, res) => {
     res.status(200).json({
       status: "OK",
@@ -5195,10 +6230,13 @@ async function startServer() {
       }
     });
   });
-  app.post("/api/v1/moderation/check", async (req, res) => {
+  app.post("/api/v1/moderation/check", asyncHandler(async (req, res) => {
     const { message, senderId, recipientId, context } = req.body;
     if (!message) {
-      return res.status(400).json({ success: false, message: "Message is required" });
+      throw new ValidationError("Message is required", {
+        path: req.path,
+        method: req.method
+      });
     }
     try {
       const result = await moderationPipeline.processTipMessage(message, {
@@ -5212,7 +6250,6 @@ async function startServer() {
         result
       });
     } catch (error) {
-      console.error("Error checking moderation:", error);
       try {
         const fallbackResult = await moderationService.moderateTipMessage(
           message,
@@ -5225,9 +6262,8 @@ async function startServer() {
           result: fallbackResult
         });
       } catch (fallbackError) {
-        res.status(500).json({
-          success: false,
-          message: "Failed to check message moderation",
+        res.status(200).json({
+          success: true,
           result: {
             isSafe: true,
             sentiment: "neutral",
@@ -5239,47 +6275,40 @@ async function startServer() {
         });
       }
     }
-  });
-  app.post("/api/v1/tip", async (req, res) => {
+  }));
+  app.post("/api/v1/tip", asyncHandler(async (req, res) => {
     const { senderId, recipientId, amount, token, message, contentId } = req.body;
     if (!senderId || !recipientId || !amount || !token) {
-      return res.status(400).json({ success: false, message: "Missing required fields: senderId, recipientId, amount, token" });
+      throw new ValidationError("Missing required fields: senderId, recipientId, amount, token", {
+        path: req.path,
+        method: req.method
+      });
     }
-    try {
-      const result = await tipService.processTip(senderId, recipientId, amount, token, message, contentId);
-      if (result.success) {
-        res.status(200).json({
-          success: true,
-          message: `Tip sent successfully! Tx Hash: ${result.txHash}`,
-          data: result
-        });
-      } else {
-        const statusCode = result.errorCode === "CONTENT_FLAGGED" ? 403 : 400;
-        res.status(statusCode).json({
-          success: false,
-          message: result.message || "Tip failed due to an unknown error.",
-          errorCode: result.errorCode
-        });
-      }
-    } catch (error) {
-      console.error("Error processing tip:", error);
-      res.status(500).json({ success: false, message: "Internal server error during tip processing." });
+    const result = await tipService.processTip(senderId, recipientId, amount, token, message, contentId);
+    if (result.success) {
+      res.status(200).json({
+        success: true,
+        message: `Tip sent successfully! Tx Hash: ${result.txHash}`,
+        data: result
+      });
+    } else {
+      const statusCode = result.errorCode === "CONTENT_FLAGGED" ? 403 : 400;
+      res.status(statusCode).json({
+        success: false,
+        message: result.message || "Tip failed due to an unknown error.",
+        errorCode: result.errorCode
+      });
     }
-  });
-  app.get("/api/v1/tip/:tipId", async (req, res) => {
+  }));
+  app.get("/api/v1/tip/:tipId", asyncHandler(async (req, res) => {
     const { tipId } = req.params;
-    try {
-      const result = await tipService.getTipStatus(tipId);
-      if (result) {
-        res.status(200).json({ success: true, data: result });
-      } else {
-        res.status(404).json({ success: false, message: "Tip not found" });
-      }
-    } catch (error) {
-      console.error("Error fetching tip status:", error);
-      res.status(500).json({ success: false, message: "Internal server error" });
+    const result = await tipService.getTipStatus(tipId);
+    if (result) {
+      res.status(200).json({ success: true, data: result });
+    } else {
+      res.status(404).json({ success: false, message: "Tip not found" });
     }
-  });
+  }));
   app.post("/api/v1/tip/recommendation", async (req, res) => {
     const { content, authorId, contentType, recipientId, senderId } = req.body;
     if (!content) {
@@ -5513,9 +6542,9 @@ Return ONLY valid JSON matching the schema.`;
     }
   });
   app.get("/api/v1/analytics/user/:userId", async (req, res) => {
-    const { userId } = req.params;
+    const { userId: userId2 } = req.params;
     try {
-      const analytics = await analyticsService.getUserAnalytics(userId);
+      const analytics = await analyticsService.getUserAnalytics(userId2);
       res.status(200).json({ success: true, data: analytics });
     } catch (error) {
       console.error("Error fetching user analytics:", error);
@@ -5523,10 +6552,10 @@ Return ONLY valid JSON matching the schema.`;
     }
   });
   app.get("/api/v1/ai/insights/user/:userId", async (req, res) => {
-    const { userId } = req.params;
+    const { userId: userId2 } = req.params;
     try {
-      const analytics = await analyticsService.getUserAnalytics(userId);
-      const insights = await aiService.generateLeaderboardInsight(userId, {
+      const analytics = await analyticsService.getUserAnalytics(userId2);
+      const insights = await aiService.generateLeaderboardInsight(userId2, {
         topRecipients: analytics.favoriteRecipients?.map((r) => ({
           id: r.userId || r.id,
           name: r.username || r.name,
@@ -5550,11 +6579,11 @@ Return ONLY valid JSON matching the schema.`;
     }
   });
   app.get("/api/v1/ai/badges/user/:userId", async (req, res) => {
-    const { userId } = req.params;
+    const { userId: userId2 } = req.params;
     try {
-      const analytics = await analyticsService.getUserAnalytics(userId);
+      const analytics = await analyticsService.getUserAnalytics(userId2);
       const uniqueRecipients = analytics.favoriteRecipients?.length || 0;
-      const badgeSuggestions = await aiService.suggestBadges(userId, {
+      const badgeSuggestions = await aiService.suggestBadges(userId2, {
         tipCount: analytics.tipsSent || 0,
         totalAmount: parseFloat(analytics.totalSent || "0"),
         uniqueRecipients,
@@ -5590,10 +6619,10 @@ Return ONLY valid JSON matching the schema.`;
     }
   });
   app.get("/api/v1/leaderboard/:userId", async (req, res) => {
-    const { userId } = req.params;
+    const { userId: userId2 } = req.params;
     const period = req.query.period || "weekly";
     try {
-      const data = await leaderboardInsightsService.fetchLeaderboardData(userId, period);
+      const data = await leaderboardInsightsService.fetchLeaderboardData(userId2, period);
       res.status(200).json(data);
     } catch (error) {
       console.error("Error fetching leaderboard data:", error);
@@ -5724,9 +6753,9 @@ Return ONLY valid JSON matching the schema.`;
     }
   });
   app.get("/api/v1/content/:contentId/access/:userId", async (req, res) => {
-    const { contentId, userId } = req.params;
+    const { contentId, userId: userId2 } = req.params;
     try {
-      const hasAccess = await contentService.hasAccessToContent(userId, contentId);
+      const hasAccess = await contentService.hasAccessToContent(userId2, contentId);
       res.status(200).json({ success: true, hasAccess });
     } catch (error) {
       console.error("Error checking content access:", error);
@@ -5735,9 +6764,9 @@ Return ONLY valid JSON matching the schema.`;
   });
   app.post("/api/v1/content/:contentId/view", async (req, res) => {
     const { contentId } = req.params;
-    const { userId } = req.body;
+    const { userId: userId2 } = req.body;
     try {
-      await contentService.recordView(contentId, userId);
+      await contentService.recordView(contentId, userId2);
       res.status(200).json({ success: true, message: "View recorded" });
     } catch (error) {
       console.error("Error recording view:", error);
@@ -5745,12 +6774,12 @@ Return ONLY valid JSON matching the schema.`;
     }
   });
   app.post("/api/v1/badges/check", async (req, res) => {
-    const { userId } = req.body;
-    if (!userId) {
+    const { userId: userId2 } = req.body;
+    if (!userId2) {
       return res.status(400).json({ success: false, message: "Missing required field: userId" });
     }
     try {
-      const newBadges = await badgeService.checkAndAwardBadges(userId);
+      const newBadges = await badgeService.checkAndAwardBadges(userId2);
       res.status(200).json({
         success: true,
         data: {
@@ -5764,10 +6793,10 @@ Return ONLY valid JSON matching the schema.`;
     }
   });
   app.get("/api/v1/badges/user/:userId", async (req, res) => {
-    const { userId } = req.params;
+    const { userId: userId2 } = req.params;
     try {
-      const badges = await badgeService.getUserBadges(userId);
-      const stats = await badgeService.getUserBadgeStats(userId);
+      const badges = await badgeService.getUserBadges(userId2);
+      const stats = await badgeService.getUserBadgeStats(userId2);
       res.status(200).json({
         success: true,
         data: {
@@ -5808,9 +6837,9 @@ Return ONLY valid JSON matching the schema.`;
     }
   });
   app.get("/api/v1/badges/user/:userId/stats", async (req, res) => {
-    const { userId } = req.params;
+    const { userId: userId2 } = req.params;
     try {
-      const stats = await badgeService.getUserBadgeStats(userId);
+      const stats = await badgeService.getUserBadgeStats(userId2);
       res.status(200).json({ success: true, data: stats });
     } catch (error) {
       console.error("Error fetching badge stats:", error);
@@ -5977,6 +7006,157 @@ Return ONLY valid JSON matching the schema.`;
       });
     }
   });
+  const { DatabaseService: DatabaseService2 } = await Promise.resolve().then(() => (init_DatabaseService(), DatabaseService_exports));
+  let SocialService3;
+  let socialService = null;
+  try {
+    const socialModule = await Promise.resolve().then(() => (init_SocialService(), SocialService_exports));
+    SocialService3 = socialModule.SocialService;
+    const db = DatabaseService2.getInstance();
+    socialService = new SocialService3(db);
+  } catch (error) {
+    console.warn("SocialService not available, social features will be limited:", error);
+  }
+  app.post("/api/social/follow", async (req, res) => {
+    if (!socialService) {
+      return res.status(503).json({ success: false, error: "Social service not available" });
+    }
+    try {
+      const { followerId, followingId } = req.body;
+      if (!followerId || !followingId) {
+        return res.status(400).json({ success: false, error: "followerId and followingId are required" });
+      }
+      const result = await socialService.followUser(followerId, followingId);
+      res.status(result.success ? 200 : 400).json(result);
+    } catch (error) {
+      console.error("Error following user:", error);
+      res.status(500).json({ success: false, error: error.message || "Failed to follow user" });
+    }
+  });
+  app.post("/api/social/unfollow", async (req, res) => {
+    try {
+      const { followerId, followingId } = req.body;
+      if (!followerId || !followingId) {
+        return res.status(400).json({ success: false, error: "followerId and followingId are required" });
+      }
+      const result = await socialService.unfollowUser(followerId, followingId);
+      res.status(result.success ? 200 : 400).json(result);
+    } catch (error) {
+      console.error("Error unfollowing user:", error);
+      res.status(500).json({ success: false, error: error.message || "Failed to unfollow user" });
+    }
+  });
+  app.get("/api/social/following/:followerId/:followingId", async (req, res) => {
+    try {
+      const { followerId, followingId } = req.params;
+      const isFollowing = await socialService.isFollowing(followerId, followingId);
+      res.status(200).json({ success: true, isFollowing });
+    } catch (error) {
+      console.error("Error checking follow status:", error);
+      res.status(500).json({ success: false, error: error.message || "Failed to check follow status" });
+    }
+  });
+  app.get("/api/social/followers/:userId", async (req, res) => {
+    try {
+      const { userId: userId2 } = req.params;
+      const limit = parseInt(req.query.limit) || 50;
+      const offset = parseInt(req.query.offset) || 0;
+      const result = await socialService.getFollowers(userId2, limit, offset);
+      res.status(200).json({ success: true, ...result });
+    } catch (error) {
+      console.error("Error fetching followers:", error);
+      res.status(500).json({ success: false, error: error.message || "Failed to fetch followers" });
+    }
+  });
+  app.get("/api/social/following/:userId", async (req, res) => {
+    try {
+      const { userId: userId2 } = req.params;
+      const limit = parseInt(req.query.limit) || 50;
+      const offset = parseInt(req.query.offset) || 0;
+      const result = await socialService.getFollowing(userId2, limit, offset);
+      res.status(200).json({ success: true, ...result });
+    } catch (error) {
+      console.error("Error fetching following:", error);
+      res.status(500).json({ success: false, error: error.message || "Failed to fetch following" });
+    }
+  });
+  app.get("/api/social/feed/:userId", async (req, res) => {
+    try {
+      const { userId: userId2 } = req.params;
+      const limit = parseInt(req.query.limit) || 20;
+      const offset = parseInt(req.query.offset) || 0;
+      const result = await socialService.getActivityFeed(userId2, limit, offset);
+      res.status(200).json({ success: true, ...result });
+    } catch (error) {
+      console.error("Error fetching activity feed:", error);
+      res.status(500).json({ success: false, error: error.message || "Failed to fetch activity feed" });
+    }
+  });
+  app.get("/api/social/activities/:userId", async (req, res) => {
+    try {
+      const { userId: userId2 } = req.params;
+      const limit = parseInt(req.query.limit) || 20;
+      const offset = parseInt(req.query.offset) || 0;
+      const result = await socialService.getUserActivities(userId2, limit, offset);
+      res.status(200).json({ success: true, ...result });
+    } catch (error) {
+      console.error("Error fetching user activities:", error);
+      res.status(500).json({ success: false, error: error.message || "Failed to fetch activities" });
+    }
+  });
+  app.get("/api/social/notifications/:userId", async (req, res) => {
+    try {
+      const { userId: userId2 } = req.params;
+      const limit = parseInt(req.query.limit) || 20;
+      const offset = parseInt(req.query.offset) || 0;
+      const unreadOnly = req.query.unreadOnly === "true";
+      const result = await socialService.getNotifications(userId2, limit, offset, unreadOnly);
+      res.status(200).json({ success: true, ...result });
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+      res.status(500).json({ success: false, error: error.message || "Failed to fetch notifications" });
+    }
+  });
+  app.post("/api/social/notifications/:notificationId/read", async (req, res) => {
+    try {
+      const { notificationId } = req.params;
+      const { userId: userId2 } = req.body;
+      if (!userId2) {
+        return res.status(400).json({ success: false, error: "userId is required" });
+      }
+      await socialService.markNotificationRead(notificationId, userId2);
+      res.status(200).json({ success: true, message: "Notification marked as read" });
+    } catch (error) {
+      console.error("Error marking notification as read:", error);
+      res.status(500).json({ success: false, error: error.message || "Failed to mark notification as read" });
+    }
+  });
+  app.post("/api/social/notifications/read-all", async (req, res) => {
+    try {
+      const { userId: userId2 } = req.body;
+      if (!userId2) {
+        return res.status(400).json({ success: false, error: "userId is required" });
+      }
+      await socialService.markAllNotificationsRead(userId2);
+      res.status(200).json({ success: true, message: "All notifications marked as read" });
+    } catch (error) {
+      console.error("Error marking all notifications as read:", error);
+      res.status(500).json({ success: false, error: error.message || "Failed to mark all notifications as read" });
+    }
+  });
+  app.get("/api/social/profile/:userId", async (req, res) => {
+    try {
+      const { userId: userId2 } = req.params;
+      const profile = await socialService.getUserProfile(userId2);
+      if (!profile) {
+        return res.status(404).json({ success: false, error: "User not found" });
+      }
+      res.status(200).json({ success: true, profile });
+    } catch (error) {
+      console.error("Error fetching user profile:", error);
+      res.status(500).json({ success: false, error: error.message || "Failed to fetch user profile" });
+    }
+  });
   app.post("/webhook/verychat", async (req, res) => {
     try {
       const { handleVeryChatWebhook: handleVeryChatWebhook2 } = await Promise.resolve().then(() => (init_verychat(), verychat_exports));
@@ -6000,4 +7180,7 @@ Return ONLY valid JSON matching the schema.`;
     console.log(`Environment: ${config2.NODE_ENV}`);
   });
 }
-startServer().catch(console.error);
+startServer().catch((error) => {
+  console.error("Failed to start server:", error);
+  process.exit(1);
+});
