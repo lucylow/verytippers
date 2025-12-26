@@ -88,7 +88,7 @@ export class BadgeService {
         awardedBadges.push(badge);
       } catch (error: any) {
         // Ignore duplicate key errors (race condition)
-        if (!error.message?.includes('Unique constraint') && !error.code === 'P2002') {
+        if (!error.message?.includes('Unique constraint') && error.code !== 'P2002') {
           console.error(`Error awarding badge ${badge.badgeId} to user ${userId}:`, error);
         }
       }

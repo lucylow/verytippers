@@ -1,0 +1,27 @@
+{
+  "type": "ai_tip_policy_evaluation",
+  "input": {
+    "from_user": "bob",
+    "to_user": "alice",
+    "amount": 5,
+    "currency": "VERY",
+    "historical_context": {
+      "tips_last_24h": 3,
+      "total_amount_24h": 12,
+      "account_age_days": 45
+    }
+  },
+  "output": {
+    "allowed": true,
+    "risk_score": 0.08,
+    "flags": [],
+    "decision": "approved",
+    "explanation": "Amount and frequency fall within normal behavior for this user."
+  },
+  "policy_thresholds": {
+    "max_single_tip": 50,
+    "max_daily_amount": 100,
+    "risk_cutoff": 0.6
+  }
+}
+

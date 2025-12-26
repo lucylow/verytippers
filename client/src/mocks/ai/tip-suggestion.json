@@ -1,0 +1,31 @@
+{
+  "type": "ai_tip_suggestion",
+  "input": {
+    "command": "/tip @alice",
+    "context": {
+      "chat_platform": "discord",
+      "channel_type": "public",
+      "sender_username": "bob",
+      "recipient_username": "alice",
+      "recent_messages": [
+        "Alice just shipped a big PR!",
+        "That was super helpful, thanks!",
+        "Finally fixed the bug 🎉"
+      ]
+    }
+  },
+  "output": {
+    "suggested_amount": 5,
+    "currency": "VERY",
+    "confidence": 0.87,
+    "suggested_message": "Nice work on the PR — really appreciate it!",
+    "reasoning_summary": "Positive contribution and recent achievement detected in chat context."
+  },
+  "ui_hints": {
+    "display_style": "inline_suggestion",
+    "accept_button": "Use suggestion",
+    "edit_button": "Edit",
+    "badge": "AI Suggested"
+  }
+}
+
