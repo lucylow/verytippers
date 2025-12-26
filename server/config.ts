@@ -26,9 +26,14 @@ export const config = {
     // Redis
     REDIS_URL: process.env.REDIS_URL || 'redis://localhost:6379',
 
-    // IPFS
+    // IPFS - Infura
     IPFS_PROJECT_ID: process.env.IPFS_PROJECT_ID || '',
     IPFS_PROJECT_SECRET: process.env.IPFS_PROJECT_SECRET || '',
+
+    // IPFS - Pinata (Free tier: 1GB storage, recommended for demo/hack)
+    PINATA_API_KEY: process.env.PINATA_API_KEY || '',
+    PINATA_SECRET_API_KEY: process.env.PINATA_SECRET_API_KEY || '',
+    PINATA_GATEWAY_URL: process.env.PINATA_GATEWAY_URL || 'https://gateway.pinata.cloud',
 
     // Blockchain
     VERY_CHAIN_RPC_URL: process.env.VERY_CHAIN_RPC_URL || 'http://localhost:8545',
@@ -41,4 +46,8 @@ export const config = {
 
     // AI/HuggingFace
     HUGGINGFACE_API_KEY: process.env.HUGGINGFACE_API_KEY || 'dummy_hf_key',
+    
+    // OpenAI
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
+    OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o-mini',
 };

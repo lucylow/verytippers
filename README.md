@@ -19,8 +19,9 @@ VeryTippers is a comprehensive social micro-tipping and content monetization pla
 - 🔗 **Blockchain Integration** - Smart contracts on Very Chain for transparent and trustless transactions
 - ⚡ **Meta-Transaction Support** - Gasless transactions via relayer service
 - 📊 **Real-time Processing** - Async job queue with Redis and BullMQ
-- 🔐 **IPFS Storage** - Decentralized message storage with end-to-end encryption
+- 🔐 **IPFS Storage** - Decentralized message storage with Pinata (free tier) or Infura support
 - 🏆 **Gamification** - Badge system and leaderboards for user engagement
+- 📊 **Dataset-Based AI Suggestions** - Content similarity matching for tip recommendations using Hugging Face embeddings
 
 ---
 
@@ -706,6 +707,13 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - **Powered by**: Very Network & DoraHacks
 - **AI Model**: [unitary/toxic-bert](https://huggingface.co/unitary/toxic-bert) by HuggingFace
 - **Smart Contracts**: OpenZeppelin Contracts
+
+---
+
+## 📚 Additional Documentation
+
+- **[APIs & Datasets Guide](./docs/APIS_AND_DATASETS.md)** - Comprehensive guide for using free APIs, IPFS pinning (Pinata), Hugging Face datasets, and mock data utilities
+- **[Quick Start: APIs](./docs/QUICK_START_APIS.md)** - Quick reference for setting up Pinata IPFS and Hugging Face API
 
 ---
 

@@ -15,6 +15,7 @@ model User {
   content            Content[]             @relation("ContentCreator")
   subscriptions      ContentSubscription[] @relation("Subscriber")
   creatorSubscriptions ContentSubscription[] @relation("Creator")
+  badges             UserBadge[]           @relation("UserBadges")
   createdAt          DateTime              @default(now())
   updatedAt          DateTime              @updatedAt
 }
@@ -38,12 +39,41 @@ model Tip {
 }
 
 model Badge {
-  id          String   @id @default(uuid())
+  id          String     @id @default(cuid())
+  badgeId     String     @unique // User-friendly badge identifier (e.g., 'first-tip')
   name        String
+  emoji       String
   description String
-  imageUrl    String
-  criteria    Json
+  rarity      String     // bronze, silver, gold, platinum, diamond
+  criteria    Json       // Badge criteria definition
+  imageUrl    String?
+  isActive    Boolean    @default(true)
+  userBadges  UserBadge[] @relation("BadgeUsers")
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([badgeId])
+  @@index([rarity])
+}
+
+model UserBadge {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation("UserBadges", fields: [userId], references: [id])
+  badgeInternalId String // References Badge.id (primary key)
+  badge       Badge    @relation("BadgeUsers", fields: [badgeInternalId], references: [id])
+  badgeId     String   // User-friendly badge identifier (e.g., 'first-tip') stored for easy lookup
+  awardedAt   DateTime @default(now())
+  revokedAt   DateTime?
+  metadata    Json     @default("{}")
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, badgeId])
+  @@index([userId])
+  @@index([badgeId])
+  @@index([badgeInternalId])
+  @@index([awardedAt])
 }
 
 model Content {

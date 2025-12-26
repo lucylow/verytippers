@@ -68,11 +68,28 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   handleReset = () => {
-    this.setState({ hasError: false, error: null, errorInfo: null });
+    try {
+      this.setState({ hasError: false, error: null, errorInfo: null });
+    } catch (error) {
+      console.error("Failed to reset error boundary:", error);
+      // If reset fails, try reloading the page
+      window.location.reload();
+    }
   };
 
   handleGoHome = () => {
-    window.location.href = "/";
+    try {
+      window.location.href = "/";
+    } catch (error) {
+      console.error("Failed to navigate home:", error);
+      // Fallback: try using history API
+      try {
+        window.history.pushState(null, "", "/");
+        window.location.reload();
+      } catch (fallbackError) {
+        console.error("Fallback navigation also failed:", fallbackError);
+      }
+    }
   };
 
   render() {

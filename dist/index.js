@@ -28,9 +28,13 @@ var config2 = {
   WEBHOOK_SECRET: process.env.WEBHOOK_SECRET || "dummy_secret",
   // Redis
   REDIS_URL: process.env.REDIS_URL || "redis://localhost:6379",
-  // IPFS
+  // IPFS - Infura
   IPFS_PROJECT_ID: process.env.IPFS_PROJECT_ID || "",
   IPFS_PROJECT_SECRET: process.env.IPFS_PROJECT_SECRET || "",
+  // IPFS - Pinata (Free tier: 1GB storage, recommended for demo/hack)
+  PINATA_API_KEY: process.env.PINATA_API_KEY || "",
+  PINATA_SECRET_API_KEY: process.env.PINATA_SECRET_API_KEY || "",
+  PINATA_GATEWAY_URL: process.env.PINATA_GATEWAY_URL || "https://gateway.pinata.cloud",
   // Blockchain
   VERY_CHAIN_RPC_URL: process.env.VERY_CHAIN_RPC_URL || "http://localhost:8545",
   SPONSOR_PRIVATE_KEY: process.env.SPONSOR_PRIVATE_KEY || "0x0000000000000000000000000000000000000000000000000000000000000001",
@@ -39,7 +43,10 @@ var config2 = {
   BADGE_CONTRACT_ADDRESS: process.env.BADGE_CONTRACT_ADDRESS || "0xBadgeContractAddress",
   VERY_TOKEN_ADDRESS: process.env.VERY_TOKEN_ADDRESS || "0xVeryTokenAddress",
   // AI/HuggingFace
-  HUGGINGFACE_API_KEY: process.env.HUGGINGFACE_API_KEY || "dummy_hf_key"
+  HUGGINGFACE_API_KEY: process.env.HUGGINGFACE_API_KEY || "dummy_hf_key",
+  // OpenAI
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY || "",
+  OPENAI_MODEL: process.env.OPENAI_MODEL || "gpt-4o-mini"
 };
 
 // server/services/BlockchainService.ts
@@ -329,6 +336,465 @@ var HuggingFaceService = class {
       ];
     }
   }
+  /**
+   * Generate tip amount suggestions based on content similarity using embeddings
+   * This uses a lightweight embedding model to find similar content and suggest amounts
+   * based on historical tip patterns (can be enhanced with real dataset)
+   */
+  async suggestTipAmountFromDataset(content, historicalTips) {
+    const cacheKey = `hf:tip-suggestion:${Buffer.from(content).toString("base64").slice(0, 50)}`;
+    const cached = await this.cache.get(cacheKey);
+    if (cached) return JSON.parse(cached);
+    try {
+      const embedding = await this.client.featureExtraction({
+        model: "sentence-transformers/all-MiniLM-L6-v2",
+        inputs: content
+      });
+      if (historicalTips && historicalTips.length > 0) {
+        const historicalTexts = historicalTips.map((t) => t.content);
+        const historicalEmbeddings = await this.client.featureExtraction({
+          model: "sentence-transformers/all-MiniLM-L6-v2",
+          inputs: historicalTexts
+        });
+        const similarities = historicalTips.map((tip, index) => {
+          const histEmb = Array.isArray(historicalEmbeddings) ? historicalEmbeddings[index] : historicalEmbeddings[index];
+          const contentEmb = Array.isArray(embedding) ? embedding : embedding[0];
+          const dotProduct = contentEmb.reduce((sum, val, i) => sum + val * histEmb[i], 0);
+          const magnitudeA = Math.sqrt(contentEmb.reduce((sum, val) => sum + val * val, 0));
+          const magnitudeB = Math.sqrt(histEmb.reduce((sum, val) => sum + val * val, 0));
+          const similarity = dotProduct / (magnitudeA * magnitudeB);
+          return {
+            amount: tip.amount,
+            similarity
+          };
+        });
+        const topSimilar = similarities.sort((a, b) => b.similarity - a.similarity).slice(0, 5).filter((item) => item.similarity > 0.5);
+        if (topSimilar.length > 0) {
+          const weightedSum = topSimilar.reduce((sum, item) => sum + item.amount * item.similarity, 0);
+          const weightSum = topSimilar.reduce((sum, item) => sum + item.similarity, 0);
+          const suggestedAmount2 = Math.round(weightedSum / weightSum * 10) / 10;
+          const avgSimilarity = topSimilar.reduce((sum, item) => sum + item.similarity, 0) / topSimilar.length;
+          const confidence = Math.min(0.95, avgSimilarity);
+          const suggestion2 = {
+            suggestedAmount: suggestedAmount2,
+            confidence,
+            reasoning: `Based on ${topSimilar.length} similar historical tips with ${(avgSimilarity * 100).toFixed(0)}% average similarity`,
+            similarContentTips: topSimilar
+          };
+          await this.cache.set(cacheKey, JSON.stringify(suggestion2), 3600);
+          return suggestion2;
+        }
+      }
+      const contentScore = await this.scoreContent(content);
+      const baseAmount = 2;
+      const qualityMultiplier = contentScore.quality / 100;
+      const engagementMultiplier = contentScore.engagement / 100;
+      const suggestedAmount = Math.round(
+        baseAmount * (1 + qualityMultiplier * 2) * (1 + engagementMultiplier * 1.5) * 10
+      ) / 10;
+      const suggestion = {
+        suggestedAmount,
+        confidence: 0.6,
+        reasoning: `Based on content quality (${contentScore.quality}/100) and engagement score (${contentScore.engagement}/100)`
+      };
+      await this.cache.set(cacheKey, JSON.stringify(suggestion), 3600);
+      return suggestion;
+    } catch (error) {
+      console.error("Error generating dataset-based tip suggestion:", error);
+      try {
+        const contentScore = await this.scoreContent(content);
+        return {
+          suggestedAmount: contentScore.recommendedTipAmount || 5,
+          confidence: 0.5,
+          reasoning: "Using fallback content scoring method"
+        };
+      } catch (fallbackError) {
+        return {
+          suggestedAmount: 5,
+          confidence: 0.3,
+          reasoning: "Unable to analyze content, using default suggestion"
+        };
+      }
+    }
+  }
+  /**
+   * Load and prepare a dataset for tip suggestions (for offline training/analysis)
+   * This method can be used to prepare datasets from Hugging Face for local analysis
+   * Example: loadDataset('daily_dialog') for conversational datasets
+   */
+  async prepareDatasetForTraining(datasetName = "daily_dialog", sampleSize = 1e3) {
+    try {
+      console.log(`Preparing dataset: ${datasetName} (sample size: ${sampleSize})`);
+      return [];
+    } catch (error) {
+      console.error("Error preparing dataset:", error);
+      return [];
+    }
+  }
+};
+
+// server/services/AIService.ts
+var AIService = class {
+  constructor() {
+    this.openai = null;
+    this.hfService = new HuggingFaceService();
+    this.cache = CacheService.getInstance();
+    this.openaiAvailable = false;
+    this.openai = null;
+    this.initializeOpenAI();
+  }
+  async initializeOpenAI() {
+    if (!config2.OPENAI_API_KEY || config2.OPENAI_API_KEY === "") {
+      console.log("OpenAI API key not configured. Using Hugging Face models only.");
+      return;
+    }
+    try {
+      const OpenAI = (await import("openai")).default;
+      this.openai = new OpenAI({ apiKey: config2.OPENAI_API_KEY });
+      this.openaiAvailable = true;
+      console.log("OpenAI initialized successfully");
+    } catch (error) {
+      console.warn("OpenAI package not available or failed to initialize:", error);
+      this.openaiAvailable = false;
+    }
+  }
+  /**
+   * Generate intelligent tip suggestion based on chat context
+   * Uses GPT-4 if available, falls back to Hugging Face models
+   */
+  async generateTipSuggestion(chatContext, context) {
+    if (!this.openai && config2.OPENAI_API_KEY && config2.OPENAI_API_KEY !== "") {
+      await this.initializeOpenAI();
+    }
+    const cacheKey = `ai:tip-suggestion:${Buffer.from(chatContext + JSON.stringify(context || {})).toString("base64").slice(0, 80)}`;
+    const cached = await this.cache.get(cacheKey);
+    if (cached) {
+      return JSON.parse(cached);
+    }
+    try {
+      if (this.openaiAvailable && this.openai) {
+        const prompt = this.buildTipSuggestionPrompt(chatContext, context);
+        const completion = await this.openai.chat.completions.create({
+          model: config2.OPENAI_MODEL || "gpt-3.5-turbo",
+          messages: [
+            {
+              role: "system",
+              content: "You are a helpful assistant that suggests appropriate tip amounts and personalized messages for a social tipping platform. Analyze the context and provide practical, friendly suggestions."
+            },
+            {
+              role: "user",
+              content: prompt
+            }
+          ],
+          temperature: 0.7,
+          max_tokens: 200
+        });
+        const content = completion.choices[0]?.message?.content || "";
+        const parsed = this.parseTipSuggestionResponse(content);
+        await this.cache.set(cacheKey, JSON.stringify(parsed), 1800);
+        return parsed;
+      } else {
+        return this.generateTipSuggestionFallback(chatContext, context);
+      }
+    } catch (error) {
+      console.error("Error generating tip suggestion with OpenAI:", error);
+      return this.generateTipSuggestionFallback(chatContext, context);
+    }
+  }
+  /**
+   * Fallback tip suggestion using Hugging Face models
+   */
+  async generateTipSuggestionFallback(chatContext, context) {
+    const [sentiment, contentScore] = await Promise.all([
+      this.hfService.analyzeSentiment(chatContext),
+      this.hfService.scoreContent(chatContext)
+    ]);
+    let baseAmount = 5;
+    if (contentScore.quality >= 80) baseAmount = 20;
+    else if (contentScore.quality >= 60) baseAmount = 10;
+    else if (contentScore.quality < 40) baseAmount = 2;
+    if (sentiment.label === "positive") baseAmount = Math.round(baseAmount * 1.2);
+    else if (sentiment.label === "negative") baseAmount = Math.max(1, Math.round(baseAmount * 0.7));
+    if (context?.relationship === "friend" || context?.relationship === "regular") {
+      baseAmount = Math.round(baseAmount * 1.3);
+    }
+    const messageSuggestions = await this.hfService.generateMessageSuggestions({
+      recipientName: context?.recipientName,
+      contentPreview: chatContext.substring(0, 100),
+      tipAmount: baseAmount,
+      relationship: context?.relationship
+    });
+    const bestMessage = messageSuggestions[0]?.message || "Great work! Keep it up! \u{1F680}";
+    const confidence = (sentiment.score + contentScore.quality / 100) / 2;
+    const suggestion = {
+      amount: baseAmount.toString(),
+      message: bestMessage,
+      confidence: Math.min(0.95, confidence),
+      reasoning: `Based on content analysis: Quality ${contentScore.quality}/100, Sentiment: ${sentiment.label} (${Math.round(sentiment.score * 100)}% confidence).`
+    };
+    return suggestion;
+  }
+  /**
+   * Build prompt for OpenAI tip suggestion
+   */
+  buildTipSuggestionPrompt(chatContext, context) {
+    let prompt = `Analyze this chat message and suggest an appropriate tip amount and personalized message:
+
+"${chatContext}"
+
+`;
+    if (context?.recipientName) {
+      prompt += `Recipient: ${context.recipientName}
+`;
+    }
+    if (context?.relationship) {
+      prompt += `Relationship: ${context.relationship}
+`;
+    }
+    if (context?.previousTips) {
+      prompt += `Previous tips to this user: ${context.previousTips}
+`;
+    }
+    if (context?.contentQuality) {
+      prompt += `Content quality score: ${context.contentQuality}/100
+`;
+    }
+    prompt += `
+Return a JSON object with this exact structure:
+`;
+    prompt += `{"amount": "suggested_amount_as_string", "message": "personalized_tip_message", "confidence": 0.0-1.0, "reasoning": "brief_explanation"}
+`;
+    prompt += `Keep the message under 60 characters, friendly, and appropriate for the context.`;
+    return prompt;
+  }
+  /**
+   * Parse OpenAI response into TipSuggestion
+   */
+  parseTipSuggestionResponse(content) {
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        return {
+          amount: parsed.amount?.toString() || "5",
+          message: parsed.message || "Great work! Keep it up! \u{1F680}",
+          confidence: parsed.confidence || 0.7,
+          reasoning: parsed.reasoning || "AI-generated suggestion based on context."
+        };
+      }
+    } catch (error) {
+      console.error("Error parsing OpenAI response:", error);
+    }
+    return {
+      amount: "5",
+      message: "Great work! Keep it up! \u{1F680}",
+      confidence: 0.6,
+      reasoning: "Unable to parse AI response, using default suggestion."
+    };
+  }
+  /**
+   * Moderate message for toxicity and sentiment
+   * Delegates to HuggingFaceService
+   */
+  async moderateMessage(message) {
+    const moderation = await this.hfService.moderateContent(message);
+    const sentiment = await this.hfService.analyzeSentiment(message);
+    return {
+      isToxic: moderation.flagged || !moderation.isSafe,
+      sentiment: sentiment.label,
+      details: moderation
+    };
+  }
+  /**
+   * Generate personalized leaderboard insights
+   */
+  async generateLeaderboardInsight(userId, analytics) {
+    if (!this.openai && config2.OPENAI_API_KEY && config2.OPENAI_API_KEY !== "") {
+      await this.initializeOpenAI();
+    }
+    const cacheKey = `ai:leaderboard-insight:${userId}`;
+    const cached = await this.cache.get(cacheKey);
+    if (cached) {
+      return JSON.parse(cached);
+    }
+    try {
+      if (this.openaiAvailable && this.openai) {
+        const prompt = this.buildLeaderboardInsightPrompt(userId, analytics);
+        const completion = await this.openai.chat.completions.create({
+          model: config2.OPENAI_MODEL || "gpt-3.5-turbo",
+          messages: [
+            {
+              role: "system",
+              content: "You are a friendly analytics assistant that provides personalized, encouraging insights about user tipping behavior. Keep insights positive, actionable, and under 200 characters each."
+            },
+            {
+              role: "user",
+              content: prompt
+            }
+          ],
+          temperature: 0.8,
+          max_tokens: 300
+        });
+        const content = completion.choices[0]?.message?.content || "";
+        const parsed = this.parseLeaderboardInsight(content, analytics);
+        await this.cache.set(cacheKey, JSON.stringify(parsed), 3600);
+        return parsed;
+      } else {
+        return this.generateLeaderboardInsightFallback(userId, analytics);
+      }
+    } catch (error) {
+      console.error("Error generating leaderboard insight:", error);
+      return this.generateLeaderboardInsightFallback(userId, analytics);
+    }
+  }
+  /**
+   * Build prompt for leaderboard insights
+   */
+  buildLeaderboardInsightPrompt(userId, analytics) {
+    let prompt = `Generate a personalized weekly summary for a user on a tipping platform.
+
+`;
+    prompt += `User Stats:
+`;
+    prompt += `- Total tips sent: ${analytics.totalTips || 0}
+`;
+    prompt += `- Total received: ${analytics.totalReceived || 0}
+`;
+    if (analytics.streak) {
+      prompt += `- Current tip streak: ${analytics.streak} days
+`;
+    }
+    if (analytics.topRecipients && analytics.topRecipients.length > 0) {
+      prompt += `
+Top recipients:
+`;
+      analytics.topRecipients.slice(0, 3).forEach((r, i) => {
+        prompt += `${i + 1}. ${r.name || r.id}: ${r.tipCount} tips, ${r.totalAmount} total
+`;
+      });
+    }
+    if (analytics.topSenders && analytics.topSenders.length > 0) {
+      prompt += `
+Top tippers to this user:
+`;
+      analytics.topSenders.slice(0, 3).forEach((r, i) => {
+        prompt += `${i + 1}. ${r.name || r.id}: ${r.tipCount} tips, ${r.totalAmount} total
+`;
+      });
+    }
+    prompt += `
+Return a JSON object:
+`;
+    prompt += `{"summary": "brief_summary_under_150_chars", "insights": ["insight1", "insight2"], "recommendations": ["rec1", "rec2"]}
+`;
+    prompt += `Make it warm, encouraging, and specific to their activity.`;
+    return prompt;
+  }
+  /**
+   * Parse leaderboard insight response
+   */
+  parseLeaderboardInsight(content, analytics) {
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        return {
+          summary: parsed.summary || "Your tipping activity this week",
+          insights: Array.isArray(parsed.insights) ? parsed.insights : [],
+          recommendations: Array.isArray(parsed.recommendations) ? parsed.recommendations : []
+        };
+      }
+    } catch (error) {
+      console.error("Error parsing leaderboard insight:", error);
+    }
+    return this.generateLeaderboardInsightFallback("", analytics);
+  }
+  /**
+   * Fallback template-based leaderboard insights
+   */
+  generateLeaderboardInsightFallback(userId, analytics) {
+    const insights = [];
+    const recommendations = [];
+    if (analytics.totalTips > 0) {
+      insights.push(`You've sent ${analytics.totalTips} tip${analytics.totalTips > 1 ? "s" : ""} this period!`);
+    }
+    if (analytics.topRecipients && analytics.topRecipients.length > 0) {
+      const topRecipient = analytics.topRecipients[0];
+      insights.push(`You're the top supporter of ${topRecipient.name || "your favorite creator"}!`);
+    }
+    if (analytics.streak && analytics.streak >= 3) {
+      insights.push(`Amazing ${analytics.streak}-day tipping streak! \u{1F525}`);
+    }
+    if (analytics.totalTips < 5) {
+      recommendations.push("Try tipping 5 different creators to unlock new badges!");
+    }
+    if (analytics.totalReceived > analytics.totalTips * 2) {
+      recommendations.push("Share the love - consider tipping back to creators who support you!");
+    }
+    const summary = insights.length > 0 ? insights[0] : "Keep up the great work supporting creators!";
+    return {
+      summary,
+      insights: insights.slice(0, 3),
+      recommendations: recommendations.slice(0, 2)
+    };
+  }
+  /**
+   * Suggest badges based on user behavior
+   */
+  async suggestBadges(userId, behavior) {
+    const suggestions = [];
+    if (behavior.tipCount >= 1 && behavior.tipCount < 5) {
+      suggestions.push({
+        badgeName: "First Steps",
+        reason: "Sent your first tip!",
+        progress: 100
+      });
+    }
+    if (behavior.tipCount >= 5) {
+      suggestions.push({
+        badgeName: "Generous Tipper",
+        reason: `Sent ${behavior.tipCount} tips to creators`,
+        progress: Math.min(100, behavior.tipCount / 10 * 100)
+      });
+    }
+    if (behavior.uniqueRecipients >= 10) {
+      suggestions.push({
+        badgeName: "Community Builder",
+        reason: `Supported ${behavior.uniqueRecipients} different creators`,
+        progress: Math.min(100, behavior.uniqueRecipients / 20 * 100)
+      });
+    }
+    if (behavior.streak >= 7) {
+      suggestions.push({
+        badgeName: "Streak Master",
+        reason: `${behavior.streak}-day tipping streak!`,
+        progress: Math.min(100, behavior.streak / 30 * 100)
+      });
+    }
+    if (parseFloat(behavior.totalAmount.toString()) >= 100) {
+      suggestions.push({
+        badgeName: "Big Spender",
+        reason: `Tipped over ${behavior.totalAmount} VERY tokens`,
+        progress: Math.min(100, parseFloat(behavior.totalAmount.toString()) / 500 * 100)
+      });
+    }
+    return suggestions;
+  }
+  /**
+   * Expose Hugging Face service methods for backward compatibility
+   */
+  get moderation() {
+    return {
+      moderateContent: (text) => this.hfService.moderateContent(text),
+      analyzeSentiment: (text) => this.hfService.analyzeSentiment(text)
+    };
+  }
+  get content() {
+    return {
+      scoreContent: (text, context) => this.hfService.scoreContent(text, context),
+      generateMessageSuggestions: (context) => this.hfService.generateMessageSuggestions(context)
+    };
+  }
 };
 
 // server/services/VerychatService.ts
@@ -376,10 +842,14 @@ var VerychatService = class {
 
 // server/services/IpfsService.ts
 import { create } from "ipfs-http-client";
+import axios2 from "axios";
 var IpfsService = class {
   constructor() {
     this.client = null;
-    if (config2.IPFS_PROJECT_ID && config2.IPFS_PROJECT_SECRET) {
+    if (config2.PINATA_API_KEY && config2.PINATA_SECRET_API_KEY) {
+      this.provider = "pinata";
+    } else if (config2.IPFS_PROJECT_ID && config2.IPFS_PROJECT_SECRET) {
+      this.provider = "infura";
       const auth = "Basic " + Buffer.from(config2.IPFS_PROJECT_ID + ":" + config2.IPFS_PROJECT_SECRET).toString("base64");
       this.client = create({
         host: "ipfs.infura.io",
@@ -389,9 +859,17 @@ var IpfsService = class {
           authorization: auth
         }
       });
+    } else {
+      this.provider = "pinata";
     }
   }
+  /**
+   * Upload content to IPFS using the configured provider (Pinata or Infura)
+   */
   async upload(content) {
+    if (this.provider === "pinata") {
+      return this.uploadToPinata(content);
+    }
     if (!this.client) {
       console.warn("IPFS client not configured, returning mock hash");
       return `ipfs://mockhash_${Date.now()}`;
@@ -400,25 +878,147 @@ var IpfsService = class {
       const added = await this.client.add(content);
       return `ipfs://${added.path}`;
     } catch (error) {
-      console.error("Error uploading to IPFS:", error);
+      console.error("Error uploading to IPFS (Infura):", error);
       throw new Error("Failed to upload to IPFS");
     }
   }
-  async fetch(hash) {
-    if (!this.client) {
-      return `Mock content for ${hash}`;
+  /**
+   * Upload JSON content to Pinata IPFS (free tier: 1GB storage)
+   * Documentation: https://docs.pinata.cloud/api-pinning/pin-json
+   */
+  async uploadToPinata(content) {
+    const pinataApiKey = config2.PINATA_API_KEY;
+    const pinataSecret = config2.PINATA_SECRET_API_KEY;
+    if (!pinataApiKey || !pinataSecret) {
+      console.warn("Pinata credentials not configured, returning mock hash");
+      return `ipfs://mockhash_${Date.now()}`;
     }
     try {
-      const stream = this.client.cat(hash.replace("ipfs://", ""));
-      let data = "";
-      for await (const chunk of stream) {
-        data += new TextDecoder().decode(chunk);
+      let pinataContent;
+      try {
+        pinataContent = JSON.parse(content);
+      } catch {
+        pinataContent = { message: content, timestamp: (/* @__PURE__ */ new Date()).toISOString() };
       }
-      return data;
+      const response = await axios2.post(
+        "https://api.pinata.cloud/pinning/pinJSONToIPFS",
+        { pinataContent },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            "pinata_api_key": pinataApiKey,
+            "pinata_secret_api_key": pinataSecret
+          }
+        }
+      );
+      const cid = response.data.IpfsHash;
+      if (!cid) {
+        throw new Error("Pinata response missing IpfsHash");
+      }
+      return `ipfs://${cid}`;
     } catch (error) {
-      console.error("Error fetching from IPFS:", error);
-      throw new Error("Failed to fetch from IPFS");
+      console.error("Error uploading to Pinata:", error.response?.data || error.message);
+      if (config2.NODE_ENV === "development") {
+        console.warn("Falling back to mock hash in development");
+        return `ipfs://mockhash_${Date.now()}`;
+      }
+      throw new Error("Failed to upload to Pinata IPFS");
     }
+  }
+  /**
+   * Upload file/buffer to Pinata IPFS
+   * Note: For Node.js, you'll need to install 'form-data' package:
+   * npm install form-data
+   */
+  async uploadFile(file, filename) {
+    if (this.provider !== "pinata") {
+      throw new Error("File upload currently only supported with Pinata provider");
+    }
+    const pinataApiKey = config2.PINATA_API_KEY;
+    const pinataSecret = config2.PINATA_SECRET_API_KEY;
+    if (!pinataApiKey || !pinataSecret) {
+      console.warn("Pinata credentials not configured, returning mock hash");
+      return `ipfs://mockhash_${Date.now()}`;
+    }
+    try {
+      let FormData;
+      try {
+        const formDataModule = await import("form-data");
+        FormData = formDataModule.default || formDataModule.FormData;
+      } catch {
+        throw new Error("form-data package not installed. Install it with: npm install form-data");
+      }
+      const formData = new FormData();
+      formData.append("file", file, filename || "file");
+      const metadata = JSON.stringify({
+        name: filename || "uploaded-file"
+      });
+      formData.append("pinataMetadata", metadata);
+      const response = await axios2.post(
+        "https://api.pinata.cloud/pinning/pinFileToIPFS",
+        formData,
+        {
+          headers: {
+            ...formData.getHeaders(),
+            "pinata_api_key": pinataApiKey,
+            "pinata_secret_api_key": pinataSecret
+          },
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity
+        }
+      );
+      const cid = response.data.IpfsHash;
+      if (!cid) {
+        throw new Error("Pinata response missing IpfsHash");
+      }
+      return `ipfs://${cid}`;
+    } catch (error) {
+      console.error("Error uploading file to Pinata:", error.response?.data || error.message);
+      throw new Error("Failed to upload file to Pinata IPFS");
+    }
+  }
+  /**
+   * Fetch content from IPFS
+   */
+  async fetch(hash) {
+    const cleanHash = hash.replace("ipfs://", "").replace("/ipfs/", "");
+    if (this.provider === "pinata" && config2.PINATA_GATEWAY_URL) {
+      try {
+        const response = await axios2.get(`${config2.PINATA_GATEWAY_URL}/ipfs/${cleanHash}`, {
+          timeout: 1e4
+        });
+        return typeof response.data === "string" ? response.data : JSON.stringify(response.data);
+      } catch (error) {
+        console.warn("Failed to fetch from Pinata gateway, trying public gateway");
+      }
+    }
+    try {
+      const response = await axios2.get(`https://ipfs.io/ipfs/${cleanHash}`, {
+        timeout: 1e4
+      });
+      return typeof response.data === "string" ? response.data : JSON.stringify(response.data);
+    } catch (error) {
+      console.error("Error fetching from public IPFS gateway:", error);
+    }
+    if (this.client) {
+      try {
+        const stream = this.client.cat(cleanHash);
+        let data = "";
+        for await (const chunk of stream) {
+          data += new TextDecoder().decode(chunk);
+        }
+        return data;
+      } catch (error) {
+        console.error("Error fetching from Infura IPFS:", error);
+      }
+    }
+    throw new Error("Failed to fetch from IPFS (all methods failed)");
+  }
+  /**
+   * Get the current IPFS provider
+   */
+  getProvider() {
+    return this.provider;
   }
 };
 
@@ -762,6 +1362,7 @@ var TipService = class {
     this.db = DatabaseService.getInstance();
     this.blockchainService = new BlockchainService();
     this.hfService = new HuggingFaceService();
+    this.aiService = new AIService();
     this.verychatService = new VerychatService();
     this.ipfsService = new IpfsService();
     this.analyticsService = new TipAnalyticsService();
@@ -926,15 +1527,15 @@ var TipService = class {
       }
       if (message && !options?.skipModeration) {
         try {
-          const moderationResult = await this.hfService.moderateContent(message);
-          if (moderationResult.flagged) {
+          const moderation = await this.aiService.moderateMessage(message);
+          if (moderation.isToxic) {
             return {
               success: false,
               message: "Tip message flagged by content moderation.",
               errorCode: "CONTENT_FLAGGED"
             };
           }
-          if (moderationResult.needsManualReview) {
+          if (moderation.details.needsManualReview) {
             console.warn(`Tip message requires manual review: ${message.substring(0, 50)}`);
           }
         } catch (moderationError) {
@@ -1592,6 +2193,19 @@ async function startServer() {
     } catch (error) {
       console.error("Error generating message suggestions:", error);
       res.status(500).json({ success: false, message: "Failed to generate suggestions" });
+    }
+  });
+  app.post("/api/v1/tip/dataset-suggestion", async (req, res) => {
+    const { content, historicalTips } = req.body;
+    if (!content) {
+      return res.status(400).json({ success: false, message: "Content is required" });
+    }
+    try {
+      const suggestion = await hfService.suggestTipAmountFromDataset(content, historicalTips);
+      res.status(200).json({ success: true, data: suggestion });
+    } catch (error) {
+      console.error("Error generating dataset-based suggestion:", error);
+      res.status(500).json({ success: false, message: "Failed to generate dataset-based suggestion" });
     }
   });
   app.post("/api/v1/ai/analyze-content", async (req, res) => {

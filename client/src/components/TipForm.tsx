@@ -7,6 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TipSuggestions } from "./TipSuggestions";
 import { TipRecommendation } from "./TipRecommendation";
+import { AISuggestionTooltip } from "./AISuggestionTooltip";
+import { ModerationGuard } from "./ModerationGuard";
+import { useAITipSuggestions } from "@/hooks/useAITipSuggestions";
+import { useMessageModeration } from "@/hooks/useMessageModeration";
 import { Sparkles, Send, Loader2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -17,6 +21,8 @@ interface TipFormProps {
   recipientName?: string;
   content?: string;
   contentAuthorId?: string;
+  chatMessage?: string; // Optional chat message for AI analysis
+  chatSender?: string; // Optional chat sender for AI analysis
   onTipSent?: (tipId: string) => void;
 }
 
@@ -26,6 +32,8 @@ export function TipForm({
   recipientName,
   content,
   contentAuthorId,
+  chatMessage,
+  chatSender,
   onTipSent,
 }: TipFormProps) {
   const [amount, setAmount] = useState("");
@@ -34,6 +42,8 @@ export function TipForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showAIFeatures, setShowAIFeatures] = useState(!!content);
+  const { result: moderationResult, isChecking: isModerating, moderateAndSend } = useMessageModeration();
+  const { suggestions, isAnalyzing, suggestTipForMessage } = useAITipSuggestions();
 
   const handleSendTip = async () => {
     // Validate amount
@@ -56,6 +66,16 @@ export function TipForm({
       setError("Amount exceeds maximum limit");
       toast.error("Amount is too large. Maximum is 1,000,000");
       return;
+    }
+
+    // Moderate message if provided
+    if (message) {
+      const moderationCheck = await moderateAndSend(message);
+      if (!moderationCheck.success) {
+        setError(`Message blocked: ${moderationCheck.result?.flaggedReason || 'Content moderation failed'}`);
+        toast.error("Your message was blocked. Please edit it and try again.");
+        return;
+      }
     }
 
     setLoading(true);
@@ -181,6 +201,19 @@ export function TipForm({
     setMessage(selectedMessage);
   };
 
+  const handleAITipSuggestion = async (suggestedAmount: number, suggestedMessage: string) => {
+    setAmount(suggestedAmount.toString());
+    setMessage(suggestedMessage);
+    toast.success(`AI suggestion applied: ${suggestedAmount.toFixed(2)} VERY`);
+  };
+
+  // Auto-analyze chat message if provided
+  useEffect(() => {
+    if (chatMessage && chatSender && chatSender !== senderId) {
+      suggestTipForMessage(chatMessage, chatSender, recipientId);
+    }
+  }, [chatMessage, chatSender, senderId, recipientId, suggestTipForMessage]);
+
   return (
     <div className="space-y-6">
       {showAIFeatures && content && (
@@ -245,10 +278,20 @@ export function TipForm({
               onChange={(e) => setMessage(e.target.value)}
               rows={3}
               maxLength={500}
+              className={moderationResult?.action === 'block' ? 'border-red-500 focus:border-red-500' : ''}
             />
             <div className="text-xs text-muted-foreground text-right">
               {message.length}/500
             </div>
+            
+            {/* Moderation Guard */}
+            {message && (
+              <ModerationGuard
+                message={message}
+                onModerate={() => {}}
+                onEdit={(newMessage) => setMessage(newMessage)}
+              />
+            )}
           </div>
 
           {recipientName && (
@@ -260,16 +303,56 @@ export function TipForm({
             />
           )}
 
+          {/* AI-powered tip suggestion for chat messages */}
+          {chatMessage && chatSender && chatSender !== senderId && (
+            <div className="space-y-2">
+              <AISuggestionTooltip
+                message={chatMessage}
+                sender={chatSender}
+                recipient={recipientId}
+                onTip={handleAITipSuggestion}
+              />
+              {suggestions.length > 0 && suggestions[0].confidence > 0.7 && (
+                <div className="p-3 bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-950/20 dark:to-blue-950/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                      <span className="text-sm font-medium text-purple-900 dark:text-purple-100">
+                        AI Suggestion: {suggestions[0].amount.toFixed(2)} VERY
+                      </span>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleAITipSuggestion(suggestions[0].amount, suggestions[0].message)}
+                      className="h-7"
+                    >
+                      Use
+                    </Button>
+                  </div>
+                  <p className="text-xs text-purple-700 dark:text-purple-300 mt-1">
+                    {suggestions[0].message}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           <Button
             onClick={handleSendTip}
-            disabled={loading || !amount || parseFloat(amount) <= 0}
+            disabled={loading || !amount || parseFloat(amount) <= 0 || isModerating || moderationResult?.action === 'block'}
             className="w-full"
             size="lg"
           >
-            {loading ? (
+            {loading || isModerating ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Sending...
+                {isModerating ? 'Scanning message...' : 'Sending...'}
+              </>
+            ) : moderationResult?.action === 'block' ? (
+              <>
+                <AlertCircle className="mr-2 h-4 w-4" />
+                Message Blocked
               </>
             ) : (
               <>

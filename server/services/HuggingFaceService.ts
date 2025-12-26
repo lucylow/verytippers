@@ -31,6 +31,13 @@ export interface MessageSuggestion {
     score: number;
 }
 
+export interface DatasetBasedTipSuggestion {
+    suggestedAmount: number;
+    confidence: number;
+    reasoning: string;
+    similarContentTips?: Array<{ amount: number; similarity: number }>;
+}
+
 export class HuggingFaceService {
     private client: HfInference;
     private cache: CacheService;
@@ -304,6 +311,149 @@ export class HuggingFaceService {
                 { message: 'Loved this content! 💖', tone: 'casual', score: 0.75 },
                 { message: 'Thanks for sharing this!', tone: 'professional', score: 0.7 }
             ];
+        }
+    }
+
+    /**
+     * Generate tip amount suggestions based on content similarity using embeddings
+     * This uses a lightweight embedding model to find similar content and suggest amounts
+     * based on historical tip patterns (can be enhanced with real dataset)
+     */
+    public async suggestTipAmountFromDataset(
+        content: string,
+        historicalTips?: Array<{ content: string; amount: number }>
+    ): Promise<DatasetBasedTipSuggestion> {
+        const cacheKey = `hf:tip-suggestion:${Buffer.from(content).toString('base64').slice(0, 50)}`;
+        const cached = await this.cache.get(cacheKey);
+        if (cached) return JSON.parse(cached);
+
+        try {
+            // Generate embedding for the input content
+            const embedding = await this.client.featureExtraction({
+                model: 'sentence-transformers/all-MiniLM-L6-v2',
+                inputs: content,
+            });
+
+            // If we have historical tips, use them for similarity matching
+            if (historicalTips && historicalTips.length > 0) {
+                // Generate embeddings for historical content
+                const historicalTexts = historicalTips.map(t => t.content);
+                const historicalEmbeddings = await this.client.featureExtraction({
+                    model: 'sentence-transformers/all-MiniLM-L6-v2',
+                    inputs: historicalTexts,
+                });
+
+                // Calculate cosine similarity with historical tips
+                const similarities = historicalTips.map((tip, index) => {
+                    const histEmb = Array.isArray(historicalEmbeddings)
+                        ? (historicalEmbeddings[index] as number[])
+                        : (historicalEmbeddings as number[][])[index];
+                    const contentEmb = Array.isArray(embedding) ? (embedding as number[]) : (embedding as number[][])[0];
+
+                    // Cosine similarity
+                    const dotProduct = contentEmb.reduce((sum, val, i) => sum + val * histEmb[i], 0);
+                    const magnitudeA = Math.sqrt(contentEmb.reduce((sum, val) => sum + val * val, 0));
+                    const magnitudeB = Math.sqrt(histEmb.reduce((sum, val) => sum + val * val, 0));
+                    const similarity = dotProduct / (magnitudeA * magnitudeB);
+
+                    return {
+                        amount: tip.amount,
+                        similarity: similarity,
+                    };
+                });
+
+                // Get top 5 most similar tips
+                const topSimilar = similarities
+                    .sort((a, b) => b.similarity - a.similarity)
+                    .slice(0, 5)
+                    .filter(item => item.similarity > 0.5); // Only consider reasonably similar content
+
+                if (topSimilar.length > 0) {
+                    // Weighted average of similar tip amounts
+                    const weightedSum = topSimilar.reduce((sum, item) => sum + item.amount * item.similarity, 0);
+                    const weightSum = topSimilar.reduce((sum, item) => sum + item.similarity, 0);
+                    const suggestedAmount = Math.round((weightedSum / weightSum) * 10) / 10; // Round to 1 decimal
+
+                    // Confidence based on similarity scores
+                    const avgSimilarity = topSimilar.reduce((sum, item) => sum + item.similarity, 0) / topSimilar.length;
+                    const confidence = Math.min(0.95, avgSimilarity);
+
+                    const suggestion: DatasetBasedTipSuggestion = {
+                        suggestedAmount,
+                        confidence,
+                        reasoning: `Based on ${topSimilar.length} similar historical tips with ${(avgSimilarity * 100).toFixed(0)}% average similarity`,
+                        similarContentTips: topSimilar,
+                    };
+
+                    await this.cache.set(cacheKey, JSON.stringify(suggestion), 3600);
+                    return suggestion;
+                }
+            }
+
+            // Fallback: Use content scoring to suggest amount
+            const contentScore = await this.scoreContent(content);
+            const baseAmount = 2;
+            const qualityMultiplier = contentScore.quality / 100;
+            const engagementMultiplier = contentScore.engagement / 100;
+            const suggestedAmount = Math.round(
+                baseAmount * (1 + qualityMultiplier * 2) * (1 + engagementMultiplier * 1.5) * 10
+            ) / 10;
+
+            const suggestion: DatasetBasedTipSuggestion = {
+                suggestedAmount,
+                confidence: 0.6,
+                reasoning: `Based on content quality (${contentScore.quality}/100) and engagement score (${contentScore.engagement}/100)`,
+            };
+
+            await this.cache.set(cacheKey, JSON.stringify(suggestion), 3600);
+            return suggestion;
+        } catch (error) {
+            console.error('Error generating dataset-based tip suggestion:', error);
+            // Fallback to simple content scoring
+            try {
+                const contentScore = await this.scoreContent(content);
+                return {
+                    suggestedAmount: contentScore.recommendedTipAmount || 5,
+                    confidence: 0.5,
+                    reasoning: 'Using fallback content scoring method',
+                };
+            } catch (fallbackError) {
+                return {
+                    suggestedAmount: 5,
+                    confidence: 0.3,
+                    reasoning: 'Unable to analyze content, using default suggestion',
+                };
+            }
+        }
+    }
+
+    /**
+     * Load and prepare a dataset for tip suggestions (for offline training/analysis)
+     * This method can be used to prepare datasets from Hugging Face for local analysis
+     * Example: loadDataset('daily_dialog') for conversational datasets
+     */
+    public async prepareDatasetForTraining(
+        datasetName: string = 'daily_dialog',
+        sampleSize: number = 1000
+    ): Promise<Array<{ text: string; suggestedAmount: number }>> {
+        try {
+            // Note: This requires the @huggingface/datasets package installed
+            // For server-side, you'd typically do this in a separate training script
+            // This is a placeholder showing the concept
+
+            console.log(`Preparing dataset: ${datasetName} (sample size: ${sampleSize})`);
+            
+            // In a real implementation, you would:
+            // 1. Load dataset using: const dataset = await loadDataset(datasetName);
+            // 2. Sample the data
+            // 3. Generate embeddings
+            // 4. Train/initialize a simple model or create embeddings index
+            
+            // For now, return a mock structure
+            return [];
+        } catch (error) {
+            console.error('Error preparing dataset:', error);
+            return [];
         }
     }
 }

@@ -1,10 +1,12 @@
 import { BlockchainService } from './BlockchainService';
 import { HuggingFaceService } from './HuggingFaceService';
+import { AIService } from './AIService';
 import { VerychatService } from './VerychatService';
 import { IpfsService } from './IpfsService';
 import { DatabaseService } from './DatabaseService';
 import { QueueService } from './QueueService';
 import { TipAnalyticsService } from './TipAnalyticsService';
+import { BadgeService } from './BadgeService';
 import { config } from '../config';
 import { ethers } from 'ethers';
 import { Job } from 'bullmq';
@@ -31,18 +33,22 @@ export interface TipRecommendation {
 export class TipService {
     private blockchainService: BlockchainService;
     private hfService: HuggingFaceService;
+    private aiService: AIService;
     private verychatService: VerychatService;
     private ipfsService: IpfsService;
     private analyticsService: TipAnalyticsService;
+    private badgeService: BadgeService;
     private db = DatabaseService.getInstance();
     private queueService: QueueService;
 
     constructor() {
         this.blockchainService = new BlockchainService();
         this.hfService = new HuggingFaceService();
+        this.aiService = new AIService();
         this.verychatService = new VerychatService();
         this.ipfsService = new IpfsService();
         this.analyticsService = new TipAnalyticsService();
+        this.badgeService = new BadgeService();
         this.queueService = new QueueService(this.processQueueJob.bind(this));
         
         // Start listening to blockchain events
@@ -115,40 +121,55 @@ export class TipService {
 
     /**
      * Get AI-powered tip recommendation based on content
+     * Enhanced version that can use OpenAI for intelligent suggestions
      */
     public async getTipRecommendation(
         content: string,
-        context?: { authorId?: string; contentType?: string }
+        context?: { authorId?: string; contentType?: string; recipientId?: string; senderId?: string }
     ): Promise<TipRecommendation> {
         try {
-            const contentScore = await this.hfService.scoreContent(content, context);
+            // Try to get relationship context if recipient and sender IDs are provided
+            let relationship: 'friend' | 'creator' | 'stranger' | 'regular' | undefined;
+            let previousTips = 0;
             
-            const recommendedAmount = contentScore.recommendedTipAmount || 5;
-            const quality = contentScore.quality;
-            const engagement = contentScore.engagement;
-            const sentiment = contentScore.sentiment.label;
-
-            // Calculate confidence based on score consistency
-            const scoreVariance = Math.abs(quality - engagement) / 100;
-            const confidence = Math.max(0.5, 1 - scoreVariance);
-
-            let reasoning = `Based on content analysis: Quality score ${quality}/100, Engagement score ${engagement}/100, Sentiment: ${sentiment}.`;
-            if (quality >= 80) {
-                reasoning += ' High-quality content deserves generous tipping.';
-            } else if (quality >= 60) {
-                reasoning += ' Good content with room for improvement.';
-            } else {
-                reasoning += ' Content could benefit from more detail and engagement.';
+            if (context?.senderId && context?.recipientId) {
+                try {
+                    const tipHistory = await this.db.tip.count({
+                        where: {
+                            senderId: context.senderId,
+                            recipientId: context.recipientId,
+                            status: 'COMPLETED'
+                        }
+                    });
+                    previousTips = tipHistory;
+                    
+                    if (tipHistory > 5) relationship = 'regular';
+                    else if (tipHistory > 0) relationship = 'friend';
+                    else relationship = 'stranger';
+                } catch (error) {
+                    // Fail silently, use default
+                }
             }
 
+            // Use new AI service for intelligent suggestions with chat context
+            const suggestion = await this.aiService.generateTipSuggestion(content, {
+                recipientName: context?.recipientId,
+                relationship,
+                previousTips,
+                contentQuality: undefined // Will be calculated by AI service
+            });
+
+            // Get content score for detailed analysis
+            const contentScore = await this.hfService.scoreContent(content, context);
+            
             return {
-                recommendedAmount: recommendedAmount.toString(),
-                confidence,
-                reasoning,
+                recommendedAmount: suggestion.amount,
+                confidence: suggestion.confidence,
+                reasoning: suggestion.reasoning,
                 contentScore: {
-                    quality,
-                    engagement,
-                    sentiment
+                    quality: contentScore.quality,
+                    engagement: contentScore.engagement,
+                    sentiment: contentScore.sentiment.label
                 }
             };
         } catch (error) {
@@ -158,6 +179,67 @@ export class TipService {
                 recommendedAmount: '5',
                 confidence: 0.5,
                 reasoning: 'Unable to analyze content. Using default recommendation.',
+            };
+        }
+    }
+
+    /**
+     * Get intelligent tip suggestion with personalized message
+     * Uses OpenAI GPT if available for context-aware suggestions
+     */
+    public async getIntelligentTipSuggestion(
+        chatContext: string,
+        options?: {
+            recipientId?: string;
+            senderId?: string;
+            recipientName?: string;
+        }
+    ): Promise<{ amount: string; message: string; confidence: number; reasoning: string }> {
+        try {
+            // Get relationship context
+            let relationship: 'friend' | 'creator' | 'stranger' | 'regular' | undefined;
+            let previousTips = 0;
+            
+            if (options?.senderId && options?.recipientId) {
+                try {
+                    const tipHistory = await this.db.tip.count({
+                        where: {
+                            senderId: options.senderId,
+                            recipientId: options.recipientId,
+                            status: 'COMPLETED'
+                        }
+                    });
+                    previousTips = tipHistory;
+                    
+                    if (tipHistory > 5) relationship = 'regular';
+                    else if (tipHistory > 0) relationship = 'friend';
+                    else relationship = 'stranger';
+                } catch (error) {
+                    // Fail silently
+                }
+            }
+
+            // Use AI service for intelligent suggestion
+            const suggestion = await this.aiService.generateTipSuggestion(chatContext, {
+                recipientName: options?.recipientName || options?.recipientId,
+                relationship,
+                previousTips
+            });
+
+            return {
+                amount: suggestion.amount,
+                message: suggestion.message,
+                confidence: suggestion.confidence,
+                reasoning: suggestion.reasoning
+            };
+        } catch (error) {
+            console.error('Error generating intelligent tip suggestion:', error);
+            // Fallback
+            return {
+                amount: '5',
+                message: 'Great work! Keep it up! 🚀',
+                confidence: 0.5,
+                reasoning: 'Using default suggestion due to error.'
             };
         }
     }
@@ -244,18 +326,18 @@ export class TipService {
                 }
             }
 
-            // 3. AI Moderation (unless skipped)
+            // 3. AI Moderation (unless skipped) - using new AIService
             if (message && !options?.skipModeration) {
                 try {
-                    const moderationResult = await this.hfService.moderateContent(message);
-                    if (moderationResult.flagged) {
+                    const moderation = await this.aiService.moderateMessage(message);
+                    if (moderation.isToxic) {
                         return {
                             success: false,
                             message: 'Tip message flagged by content moderation.',
                             errorCode: 'CONTENT_FLAGGED'
                         };
                     }
-                    if (moderationResult.needsManualReview) {
+                    if (moderation.details.needsManualReview) {
                         // Log for manual review but allow the tip to proceed
                         console.warn(`Tip message requires manual review: ${message.substring(0, 50)}`);
                     }
@@ -425,6 +507,12 @@ export class TipService {
                 await this.db.tip.update({
                     where: { id: tip.id },
                     data: { status: 'COMPLETED', txHash: eventData.event?.transactionHash || txHash }
+                });
+
+                // Check and award badges for the sender (async, don't await)
+                this.badgeService.checkAndAwardBadges(tip.senderId).catch(error => {
+                    console.error(`Error checking badges for user ${tip.senderId}:`, error);
+                    // Don't fail the tip processing if badge check fails
                 });
 
                 // Update content earnings if tip is linked to content
