@@ -1,7 +1,7 @@
 /**
  * Wepin Wallet Adapter
  * Supports embedded wallet, mobile, iframe, and Lovable
- * Uses @wepin/sdk-js or falls back to window.Wepin
+ * Uses @wepin/sdk-js with proper initialization and error handling
  */
 
 import { WalletAdapter } from "./types";
@@ -17,6 +17,22 @@ export class WepinAdapter implements WalletAdapter {
 
   constructor() {
     this.wepinWallet = new WepinWallet();
+    
+    // Set up event listeners for account changes
+    this.wepinWallet.on('accountChanged', (account) => {
+      if (account) {
+        this.account = {
+          address: account.address,
+          chainId: account.chainId,
+        };
+      } else {
+        this.account = null;
+      }
+    });
+
+    this.wepinWallet.on('error', (error) => {
+      console.error('Wepin adapter error:', error);
+    });
   }
 
   async connect() {
@@ -31,19 +47,36 @@ export class WepinAdapter implements WalletAdapter {
         );
       }
 
-      await this.wepinWallet.initialize(appId, appKey);
+      await this.wepinWallet.initialize({
+        appId,
+        appKey,
+        attributes: {
+          defaultLanguage: 'en',
+          defaultCurrency: 'USD',
+        },
+      });
       this.initialized = true;
     }
 
     // Connect wallet
-    this.account = await this.wepinWallet.connect();
+    const wepinAccount = await this.wepinWallet.connect();
+    this.account = {
+      address: wepinAccount.address,
+      chainId: wepinAccount.chainId,
+    };
   }
 
   async disconnect() {
     if (this.wepinWallet && this.initialized) {
-      await this.wepinWallet.disconnect();
+      try {
+        await this.wepinWallet.disconnect();
+      } catch (error) {
+        console.error('Error disconnecting Wepin wallet:', error);
+        // Continue with cleanup even if disconnect fails
+      }
       this.account = null;
-      this.initialized = false;
+      // Note: We don't set initialized to false to allow reconnection
+      // If you want to fully reset, call finalize() instead
     }
   }
 
@@ -66,21 +99,37 @@ export class WepinAdapter implements WalletAdapter {
       throw new Error("Wallet not connected");
     }
 
-    // For now, we'll use a provider-based approach if available
-    // This is a placeholder - actual implementation depends on Wepin SDK API
     try {
-      const provider = await this.wepinWallet.getProvider();
-      if (provider && typeof provider.signMessage === "function") {
-        return await provider.signMessage(message);
-      }
-      // Fallback: if Wepin SDK provides direct signing
-      throw new Error("Wepin message signing not yet implemented. Please use MetaMask for now.");
+      // Use the improved signMessage method from WepinWallet
+      return await this.wepinWallet.signMessage(message);
     } catch (error) {
-      // If provider approach fails, try alternative methods
-      // This will need to be updated based on actual Wepin SDK API
-      throw new Error(
-        `Wepin message signing not available: ${error instanceof Error ? error.message : "Unknown error"}`
-      );
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      throw new Error(`Wepin message signing failed: ${errorMessage}`);
+    }
+  }
+
+  /**
+   * Get the underlying WepinWallet instance for advanced usage
+   */
+  getWallet(): WepinWallet {
+    return this.wepinWallet;
+  }
+
+  /**
+   * Check if wallet is initialized
+   */
+  isInitialized(): boolean {
+    return this.initialized;
+  }
+
+  /**
+   * Finalize and cleanup resources
+   */
+  async finalize(): Promise<void> {
+    if (this.wepinWallet) {
+      await this.wepinWallet.finalize();
+      this.initialized = false;
+      this.account = null;
     }
   }
 }

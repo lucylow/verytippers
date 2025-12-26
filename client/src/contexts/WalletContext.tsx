@@ -13,6 +13,10 @@ import {
   type TokenInfo
 } from '@/lib/web3/veryToken';
 import { getVeryBalance, type TokenBalance } from '@/lib/web3/balance';
+// Use the new adapter pattern internally
+import { MetaMaskAdapter } from '@/wallet/metamask';
+import { WepinAdapter } from '@/wallet/wepin';
+import { WalletAdapter } from '@/wallet/types';
 
 export interface WalletContextType {
   isConnected: boolean;
@@ -46,47 +50,39 @@ export function WalletProvider({ children }: WalletProviderProps) {
   const [signer, setSigner] = useState<ethers.JsonRpcSigner | null>(null);
   const [veryTokenInfo, setVeryTokenInfo] = useState<TokenInfo | null>(null);
   const [veryTokenBalance, setVeryTokenBalance] = useState<TokenBalance | null>(null);
+  const [walletAdapter, setWalletAdapter] = useState<WalletAdapter | null>(null);
 
-  // Connect wallet function
+  // Connect wallet function - now uses adapter pattern
   const connectWallet = useCallback(async (wallet: 'wepin' | 'metamask'): Promise<string[] | null> => {
     try {
-      let accounts: string[] = [];
-      
+      let adapter: WalletAdapter;
+
       if (wallet === 'wepin') {
-        // Wepin SDK integration
-        if (typeof window !== 'undefined' && (window as any).Wepin) {
-          accounts = await (window as any).Wepin.requestAccounts();
-        } else {
-          throw new Error('Wepin not installed. Please install Wepin extension.');
-        }
+        adapter = new WepinAdapter();
       } else {
-        // MetaMask / EIP-1193 compatible
-        if (!window.ethereum) {
-          throw new Error('No wallet found. Please install MetaMask or Wepin.');
-        }
-        accounts = await window.ethereum.request({ 
-          method: 'eth_requestAccounts' 
-        }) as string[];
+        adapter = new MetaMaskAdapter();
       }
 
-      if (!accounts?.length) {
-        throw new Error('No accounts available');
-      }
-
-      // Create provider (ethers v6 uses BrowserProvider)
-      if (!window.ethereum) {
-        throw new Error('Ethereum provider not found');
-      }
-
-      const browserProvider = new ethers.BrowserProvider(window.ethereum as ethers.Eip1193Provider);
-      const signerInstance = await browserProvider.getSigner();
+      await adapter.connect();
+      const addr = await adapter.getAddress();
       
-      setProvider(browserProvider);
-      setSigner(signerInstance);
-      setAddress(accounts[0]);
+      setWalletAdapter(adapter);
+      setAddress(addr);
       setIsConnected(true);
 
-      return accounts;
+      // Create provider/signer for MetaMask (for backward compatibility)
+      if (wallet === 'metamask' && adapter instanceof MetaMaskAdapter) {
+        setProvider(adapter.provider);
+        setSigner(adapter.signer);
+      } else if (wallet === 'metamask' && window.ethereum) {
+        // Fallback for MetaMask
+        const browserProvider = new ethers.BrowserProvider(window.ethereum as ethers.Eip1193Provider);
+        const signerInstance = await browserProvider.getSigner();
+        setProvider(browserProvider);
+        setSigner(signerInstance);
+      }
+
+      return [addr];
     } catch (error) {
       console.error('Wallet connection error:', error);
       throw error;
@@ -135,7 +131,9 @@ export function WalletProvider({ children }: WalletProviderProps) {
   // Disconnect wallet
   const disconnectWallet = useCallback(async () => {
     try {
-      if (window.ethereum) {
+      if (walletAdapter) {
+        await walletAdapter.disconnect();
+      } else if (window.ethereum) {
         await window.ethereum.request({
           method: 'wallet_revokePermissions',
           params: [{ eth_accounts: {} }]
@@ -145,31 +143,37 @@ export function WalletProvider({ children }: WalletProviderProps) {
       setAddress(null);
       setProvider(null);
       setSigner(null);
+      setWalletAdapter(null);
     } catch (error) {
       console.error('Disconnect error:', error);
     }
-  }, []);
+  }, [walletAdapter]);
 
-  // Listen for account/chain changes
+  // Listen for account/chain changes (MetaMask)
   useEffect(() => {
-    if (!window.ethereum) return;
+    if (!window.ethereum || !(walletAdapter instanceof MetaMaskAdapter)) return;
 
-    const handleAccountsChanged = (...args: unknown[]) => {
+    const handleAccountsChanged = async (...args: unknown[]) => {
       const accounts = args[0] as string[];
       if (accounts.length === 0) {
         setIsConnected(false);
         setAddress(null);
         setProvider(null);
         setSigner(null);
+        setWalletAdapter(null);
       } else {
-        setAddress(accounts[0]);
-        setIsConnected(true);
-        // Update provider/signer when account changes
-        const browserProvider = new ethers.BrowserProvider(window.ethereum! as ethers.Eip1193Provider);
-        browserProvider.getSigner().then((signerInstance) => {
-          setProvider(browserProvider);
-          setSigner(signerInstance);
-        });
+        // Re-fetch address from adapter
+        try {
+          const addr = await walletAdapter.getAddress();
+          setAddress(addr);
+          setIsConnected(true);
+          if (walletAdapter instanceof MetaMaskAdapter) {
+            setProvider(walletAdapter.provider);
+            setSigner(walletAdapter.signer);
+          }
+        } catch (error) {
+          console.error('Error updating address:', error);
+        }
       }
     };
 
@@ -186,7 +190,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
         window.ethereum.removeListener('chainChanged', handleChainChanged);
       }
     };
-  }, []);
+  }, [walletAdapter]);
 
   // Load VERY token info on mount
   useEffect(() => {
@@ -222,23 +226,26 @@ export function WalletProvider({ children }: WalletProviderProps) {
     refreshVeryTokenBalance();
   }, [refreshVeryTokenBalance]);
 
-  // Check for existing connection on mount
+  // Check for existing connection on mount (MetaMask)
   useEffect(() => {
     const checkConnection = async () => {
       if (!window.ethereum) return;
 
       try {
-        const accounts = await window.ethereum.request({ 
+        const accounts = (await window.ethereum.request({ 
           method: 'eth_accounts' 
-        }) as string[];
+        })) as string[];
 
         if (accounts && accounts.length > 0) {
-          const browserProvider = new ethers.BrowserProvider(window.ethereum as ethers.Eip1193Provider);
-          const signerInstance = await browserProvider.getSigner();
+          // Auto-connect to MetaMask if already connected
+          const adapter = new MetaMaskAdapter();
+          await adapter.connect();
+          const addr = await adapter.getAddress();
           
-          setProvider(browserProvider);
-          setSigner(signerInstance);
-          setAddress(accounts[0]);
+          setWalletAdapter(adapter);
+          setProvider(adapter.provider);
+          setSigner(adapter.signer);
+          setAddress(addr);
           setIsConnected(true);
         }
       } catch (error) {

@@ -60,6 +60,56 @@ export const CONTRACTS = {
       'function hasBadge(address user, uint256 badgeId) view returns (bool)',
       'event BadgeMinted(address indexed user, uint256 badgeId, string badgeName)'
     ]
+  },
+  veryRewards: {
+    address: import.meta.env.VITE_VERY_REWARDS_CONTRACT_ADDRESS || '0xMockVeryRewards00000000000000000000001',
+    abi: [
+      'function grantReward(address user, uint256 amount, string calldata reason, uint256 nonce, uint8 v, bytes32 r, bytes32 s) external',
+      'function getRewardHash(address user, uint256 amount, string calldata reason, uint256 nonce) external view returns (bytes32)',
+      'function isRewardUsed(bytes32 rewardHash) external view returns (bool)',
+      'function contractInfo() external view returns (uint256 version, address token, address signer, uint256 totalRewards)',
+      'event RewardGranted(address indexed user, uint256 amount, string reason, bytes32 indexed rewardHash)'
+    ]
+  },
+  veryReputation: {
+    address: import.meta.env.VITE_REPUTATION_CONTRACT_ADDRESS || '0xMockVeryReputation00000000000000000001',
+    abi: [
+      'function lifetimeTipped(address) view returns (uint256)',
+      'function lifetimeReceived(address) view returns (uint256)',
+      'function tipMultiplier(address) view returns (uint256)',
+      'function getReputation(address) view returns (uint256 tipped, uint256 received, uint256 multiplier)',
+      'event ReputationUpdated(address indexed user, uint256 tipped, uint256 received)'
+    ]
+  },
+  veryStake: {
+    address: import.meta.env.VITE_STAKE_CONTRACT_ADDRESS || '0xMockVeryStake00000000000000000000000001',
+    abi: [
+      'function staked(address) view returns (uint256)',
+      'function canTip(address) view returns (bool)',
+      'function minStakeRequired() view returns (uint256)',
+      'function getStakeInfo(address) view returns (uint256 stakedAmount, bool canTipUser)',
+      'function stake(uint256 amount)',
+      'function unstake(uint256 amount)',
+      'event Staked(address indexed user, uint256 amount)',
+      'event Unstaked(address indexed user, uint256 amount)'
+    ]
+  },
+  veryGovernor: {
+    address: import.meta.env.VITE_GOVERNOR_CONTRACT_ADDRESS || '0xMockVeryGovernor00000000000000000001',
+    abi: [
+      'function votingPower(address) view returns (uint256)',
+      'function getVotingPowerBreakdown(address) view returns (uint256 tokenPower, uint256 repPower, uint256 nftPower, uint256 totalPower)'
+    ]
+  },
+  veryRewardsPool: {
+    address: import.meta.env.VITE_REWARDS_POOL_ADDRESS || '0xMockVeryRewardsPool00000000000000001',
+    abi: [
+      'function dailyPool() view returns (uint256)',
+      'function currentDay() view returns (uint256)',
+      'function isDistributedToday() view returns (bool)',
+      'function distribute(address[] calldata topCreators)',
+      'event RewardsDistributed(uint256 indexed day, address[] recipients, uint256 totalAmount)'
+    ]
   }
 };
 

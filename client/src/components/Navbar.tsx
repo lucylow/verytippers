@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Menu, X } from "lucide-react";
 import { Link } from "wouter";
 import { WalletButton } from "./WalletButton";
+import { VeryLogo } from "./brand";
 
 export const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -10,12 +11,9 @@ export const Navbar = () => {
     <nav className="fixed top-0 w-full bg-background/95 backdrop-blur-md border-b border-border z-50">
       <div className="max-w-7xl mx-auto px-6 py-4">
         <div className="flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <span className="text-3xl">💸</span>
-            <span className="text-xl font-bold">
-              Very<span className="gradient-text">Tippers</span>
-            </span>
-          </div>
+          <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+            <VeryLogo size="md" variant="full" />
+          </Link>
 
           <div className="hidden md:flex items-center gap-4">
             <a href="#features" className="text-muted-foreground hover:text-foreground transition-colors font-medium">
@@ -29,6 +27,9 @@ export const Navbar = () => {
             </a>
             <Link href="/dao" className="text-muted-foreground hover:text-foreground transition-colors font-medium">
               DAO
+            </Link>
+            <Link href="/verychain" className="text-muted-foreground hover:text-foreground transition-colors font-medium">
+              Verychain
             </Link>
             <a href="#team" className="text-muted-foreground hover:text-foreground transition-colors font-medium">
               Team
@@ -56,6 +57,7 @@ export const Navbar = () => {
             <a href="#demo" className="text-muted-foreground hover:text-foreground transition-colors">Live Demo</a>
             <a href="#integration" className="text-muted-foreground hover:text-foreground transition-colors">Integration</a>
             <Link href="/dao" className="text-muted-foreground hover:text-foreground transition-colors">DAO</Link>
+            <Link href="/verychain" className="text-muted-foreground hover:text-foreground transition-colors">Verychain</Link>
             <a href="#team" className="text-muted-foreground hover:text-foreground transition-colors">Team</a>
             <WalletButton />
             <button className="gradient-bg text-primary-foreground px-5 py-2.5 rounded-xl font-semibold w-full">

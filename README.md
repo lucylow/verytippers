@@ -34,7 +34,7 @@ VeryTippers is a **production-grade, decentralized micro-tipping platform** buil
 
 ### 🏆 Hackathon Achievement
 
-**Finalist** in the VERY Hackathon 2025 (Extended) with a **$73,000 USD prize pool** 🎉
+Built for the VERY Hackathon 2025 (Extended) with a **$73,000 USD prize pool** 🎉
 
 ---
 
@@ -2677,7 +2677,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 🏆 Acknowledgments
 
-- **Built for**: VERY Hackathon 2025 (Extended) - Finalist
+- **Built for**: VERY Hackathon 2025 (Extended)
 - **Prize Pool**: $73,000 USD
 - **Powered by**: Very Network & DoraHacks
 - **AI Model**: [unitary/toxic-bert](https://huggingface.co/unitary/toxic-bert) by HuggingFace
@@ -2749,7 +2749,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 *Built with ❤️ by SocialFi Labs*
 
-**Finalist** in VERY Hackathon 2025 (Extended) 🏆
+Built for VERY Hackathon 2025 (Extended) 🏆
 
 ---
 

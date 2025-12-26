@@ -1,5 +1,5 @@
-import React, { useEffect, useCallback, useMemo, useState } from "react";
-import { Route, Switch, useLocation } from "wouter";
+import React, { useEffect, useCallback, useMemo } from "react";
+import { Route, Switch } from "wouter";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { toast } from "sonner";
@@ -13,8 +13,11 @@ import DAO from "./pages/DAO";
 import TipDemo from "./pages/TipDemo";
 import MockDemo from "./pages/MockDemo";
 import NFTMarketplace from "./pages/NFTMarketplace";
+import P2PDemo from "./pages/P2PDemo";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
 import CheckoutCancel from "./pages/CheckoutCancel";
+import TokenEcosystem from "./pages/TokenEcosystem";
+import Verychain from "./pages/Verychain";
 import { VoiceTippingButton } from "./components/VoiceTippingButton";
 import { NetworkSelector } from "./components/NetworkSelector";
 import MobileShell from "./components/MobileShell";
@@ -57,11 +60,8 @@ function RouteErrorBoundary({ children, route }: { children: React.ReactNode; ro
  * Router component with enhanced error handling
  */
 function Router() {
-  const [location] = useLocation();
-  const [isNavigating, setIsNavigating] = useState(false);
-  
   // Memoize valid routes to avoid recreation on each render
-  const validRoutes = useMemo(() => ["/", "/dao", "/demo", "/mock-demo", "/nft", "/checkout/success", "/checkout/cancel", "/404"], []);
+  const validRoutes = useMemo(() => ["/", "/dao", "/demo", "/mock-demo", "/nft", "/p2p", "/verychain", "/checkout/success", "/checkout/cancel", "/tokens", "/404"], []);
 
   // Error handler with recovery
   const handleErrorWithRecovery = useCallback(
@@ -276,41 +276,6 @@ function Router() {
     errorLogger.log(categorizedError);
   }, []);
 
-  // Navigation error handler
-  const handleNavigationError = useCallback(
-    async (targetPath: string) => {
-      try {
-        setIsNavigating(true);
-        
-        // Validate route before navigation
-        if (!validRoutes.includes(targetPath) && targetPath !== "/") {
-          throw new Error(`Invalid route: ${targetPath}`);
-        }
-
-        // Use timeout for navigation to prevent hanging
-        await withTimeout(
-          Promise.resolve(),
-          5000,
-          "Navigation timeout"
-        );
-      } catch (error) {
-        const context = {
-          route: window.location.pathname,
-          action: "navigation_error",
-          metadata: {
-            targetPath,
-          },
-        };
-
-        const categorizedError = categorizeError(error, context);
-        handleErrorWithRecovery(categorizedError);
-      } finally {
-        setIsNavigating(false);
-      }
-    },
-    [validRoutes, handleErrorWithRecovery]
-  );
-
   // Set up error handlers with comprehensive coverage
   useEffect(() => {
     // Global error handlers
@@ -445,6 +410,11 @@ function Router() {
           <NFTMarketplace />
         </RouteErrorBoundary>
       </Route>
+      <Route path="/p2p">
+        <RouteErrorBoundary route="/p2p">
+          <P2PDemo />
+        </RouteErrorBoundary>
+      </Route>
       <Route path="/checkout/success">
         <RouteErrorBoundary route="/checkout/success">
           <CheckoutSuccess />
@@ -453,6 +423,11 @@ function Router() {
       <Route path="/checkout/cancel">
         <RouteErrorBoundary route="/checkout/cancel">
           <CheckoutCancel />
+        </RouteErrorBoundary>
+      </Route>
+      <Route path="/tokens">
+        <RouteErrorBoundary route="/tokens">
+          <TokenEcosystem />
         </RouteErrorBoundary>
       </Route>
       <Route path="/404">

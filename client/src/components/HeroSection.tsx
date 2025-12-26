@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { VeryIcon } from "./brand";
 
 export const HeroSection = () => {
   const [stats, setStats] = useState({ tips: 12847, users: 3456, volume: 48750, response: 187 });
@@ -59,7 +60,7 @@ export const HeroSection = () => {
           <div className="animate-slide-up">
             <div className="inline-flex items-center gap-2 bg-primary/20 border border-primary/50 px-4 py-2 rounded-full mb-8 animate-pulse-glow">
               <span className="text-xl">🏆</span>
-              <span className="text-sm font-medium">VERY Hackathon 2025 Finalist</span>
+              <span className="text-sm font-medium">VERY Hackathon 2025</span>
             </div>
 
             <h1 className="text-5xl lg:text-6xl font-bold mb-6 leading-tight">
@@ -177,7 +178,7 @@ const PhoneChatDemo = () => {
     <div className="h-full flex flex-col">
       <div className="p-4 bg-very-gray-900 border-b border-border flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-xl">💬</span>
+          <VeryIcon size={24} />
           <span className="font-semibold">VeryChat</span>
         </div>
         <div className="flex items-center gap-2 text-secondary text-sm">

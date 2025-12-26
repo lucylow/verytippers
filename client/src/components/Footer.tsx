@@ -1,3 +1,5 @@
+import { VeryLogo } from "./brand";
+
 const footerLinks = {
   resources: [
     { label: "VeryChat API Docs", url: "https://developers.verylabs.io/" },
@@ -25,11 +27,8 @@ export const Footer = () => {
       <div className="max-w-7xl mx-auto px-6">
         <div className="grid md:grid-cols-4 gap-12 mb-12">
           <div>
-            <div className="flex items-center gap-3 mb-4">
-              <span className="text-3xl">💸</span>
-              <span className="text-xl font-bold">
-                Very<span className="gradient-text">Tippers</span>
-              </span>
+            <div className="mb-4">
+              <VeryLogo size="lg" variant="full" />
             </div>
             <p className="text-muted-foreground text-sm mb-6">
               Social micro-tipping bot for Very Network. Part of the VERY Hackathon 2025.

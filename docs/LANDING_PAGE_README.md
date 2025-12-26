@@ -233,7 +233,7 @@ Output will be in the `dist/` directory.
 Built for **VERY Hackathon 2025 (Extended)** by **SocialFi Labs**
 
 - **Prize Pool:** $73,000 USD
-- **Status:** Finalist
+- **Status:** Built for VERY Hackathon 2025
 - **Powered by:** Very Network & DoraHacks
 
 ## License

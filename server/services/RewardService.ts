@@ -206,10 +206,11 @@ export class RewardService {
         }
 
         // Compute reward hash (must match contract's getRewardHash)
+        // Contract uses: keccak256(abi.encodePacked(user, amount, reason, nonce, address(this)))
         const rewardHash = ethers.keccak256(
-            ethers.AbiCoder.defaultAbiCoder().encode(
+            ethers.solidityPacked(
                 ['address', 'uint256', 'string', 'uint256', 'address'],
-                [user, amount, reason, nonce, rewardsContractAddress]
+                [ethers.getAddress(user), amount, reason, nonce, ethers.getAddress(rewardsContractAddress)]
             )
         );
 

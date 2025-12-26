@@ -3,6 +3,8 @@ import { VeryChainService } from './blockchain/VeryChain.service';
 import { VerychatApiService } from './verychat/VerychatApi.service';
 import { UserRepository } from '../repositories/User.repository';
 import { TipRepository } from '../repositories/Tip.repository';
+import { AbuseDetectionService } from './AbuseDetection.service';
+import { RateLimitService } from './RateLimit.service';
 import { config } from '../config/config';
 import Redis from 'ioredis';
 import crypto from 'crypto';
@@ -16,6 +18,7 @@ interface TipRequest {
   token: 'VERY' | 'USDC';
   message?: string;
   chatId: string;
+  ip?: string; // Optional IP address for rate limiting
 }
 
 interface TipResult {
@@ -32,6 +35,8 @@ export class TippingService {
   private verychat: VerychatApiService;
   private userRepo: UserRepository;
   private tipRepo: TipRepository;
+  private abuseDetection: AbuseDetectionService;
+  private rateLimitService: RateLimitService;
 
   constructor() {
     this.redis = new Redis({
@@ -41,23 +46,16 @@ export class TippingService {
       ...(config.REDIS.URL && { url: config.REDIS.URL })
     });
     this.veryChain = new VeryChainService();
-    this.verychat = new VerychatApiService();
+    this.verychat = new VerychatApiService(this.redis);
     this.userRepo = new UserRepository();
     this.tipRepo = new TipRepository();
+    this.abuseDetection = new AbuseDetectionService(this.redis, this.tipRepo, this.userRepo);
+    this.rateLimitService = new RateLimitService(this.redis);
   }
 
   async processTip(request: TipRequest): Promise<TipResult> {
     try {
-      // 1. Rate limiting
-      const rateLimited = await this.checkRateLimit(request.senderId);
-      if (rateLimited) {
-        return {
-          success: false,
-          error: 'Rate limit exceeded. Please wait before sending more tips.'
-        };
-      }
-
-      // 2. Get sender and recipient info
+      // 1. Get sender and recipient info (needed for all checks)
       let sender = await this.userRepo.findByVerychatId(request.senderId);
       const recipients = await this.verychat.getUsersByUsername(request.recipientUsername.replace('@', ''));
 
@@ -89,16 +87,7 @@ export class TippingService {
         }
       }
 
-      // 3. Check KYC requirements
-      const kycCheck = await this.checkKYCRequirements(sender, recipientUser, request.amount);
-      if (!kycCheck.allowed) {
-        return {
-          success: false,
-          error: kycCheck.reason
-        };
-      }
-
-      // 4. Get wallet addresses
+      // 2. Get wallet addresses (needed for abuse detection and rate limiting)
       const senderWallet = sender.walletAddress || await this.verychat.getWalletAddress(request.senderId);
       const recipientWallet = recipientUser.walletAddress;
 
@@ -109,7 +98,77 @@ export class TippingService {
         };
       }
 
-      // 5. Check sender balance
+      // 3. Enhanced KYC verification with validation
+      const senderKYC = await this.verychat.verifyKYCWithValidation(
+        request.senderId,
+        request.amount,
+        'send'
+      );
+      if (!senderKYC.allowed) {
+        return {
+          success: false,
+          error: senderKYC.reason || 'KYC verification failed.'
+        };
+      }
+
+      const recipientKYC = await this.verychat.verifyKYCWithValidation(
+        recipientUser.id,
+        request.amount,
+        'receive'
+      );
+      if (!recipientKYC.allowed) {
+        return {
+          success: false,
+          error: recipientKYC.reason || 'Recipient KYC verification failed.'
+        };
+      }
+
+      // 4. Multi-layered rate limiting
+      const ip = request.ip || 'unknown';
+      const rateLimitCheck = await this.rateLimitService.checkAllRateLimits(
+        request.senderId,
+        ip,
+        senderWallet,
+        request.amount,
+        senderKYC.kyc.level
+      );
+
+      if (!rateLimitCheck.allowed) {
+        return {
+          success: false,
+          error: rateLimitCheck.reason || 'Rate limit exceeded. Please wait before sending more tips.'
+        };
+      }
+
+      // 5. Abuse detection
+      const abuseCheck = await this.abuseDetection.checkAbuse(
+        request.senderId,
+        recipientUser.id,
+        request.amount,
+        senderWallet,
+        recipientWallet
+      );
+
+      if (!abuseCheck.allowed) {
+        // Log high-severity abuse attempts
+        if (abuseCheck.severity === 'high' || abuseCheck.severity === 'critical') {
+          console.warn('Abuse detected:', {
+            senderId: request.senderId,
+            recipientId: recipientUser.id,
+            amount: request.amount,
+            reason: abuseCheck.reason,
+            severity: abuseCheck.severity,
+            metadata: abuseCheck.metadata
+          });
+        }
+
+        return {
+          success: false,
+          error: abuseCheck.reason || 'Transaction blocked due to abuse detection.'
+        };
+      }
+
+      // 6. Check sender balance
       const tokenAddress = this.getTokenAddress(request.token);
       const senderBalance = await this.veryChain.getTokenBalance(senderWallet, tokenAddress);
       const amountInWei = ethers.parseUnits(request.amount.toString(), 18);
@@ -121,13 +180,13 @@ export class TippingService {
         };
       }
 
-      // 6. Store message on IPFS if provided
+      // 7. Store message on IPFS if provided
       let messageHash = '';
       if (request.message) {
         messageHash = await this.storeMessageOnIPFS(request.message, recipientUser.id);
       }
 
-      // 7. Send transaction
+      // 8. Send transaction
       const txResult = await this.veryChain.sendTip(
         senderWallet,
         recipientWallet,
@@ -136,7 +195,16 @@ export class TippingService {
         messageHash
       );
 
-      // 8. Update database
+      // 9. Record successful tip for abuse detection patterns
+      await this.abuseDetection.recordTip(
+        request.senderId,
+        recipientUser.id,
+        request.amount,
+        senderWallet,
+        recipientWallet
+      );
+
+      // 10. Update database
       await this.updateDatabaseAfterTip({
         senderId: request.senderId,
         senderWallet,
@@ -150,12 +218,12 @@ export class TippingService {
         message: request.message
       });
 
-      // 9. Check and award badges (async, don't wait)
+      // 11. Check and award badges (async, don't wait)
       setTimeout(() => {
         this.veryChain.checkAndAwardBadges(senderWallet).catch(console.error);
       }, 5000);
 
-      // 10. Send notification
+      // 12. Send notification
       await this.sendNotifications(request, recipientUser, txResult.txHash);
 
       return {
@@ -174,58 +242,13 @@ export class TippingService {
     }
   }
 
+  /**
+   * Legacy rate limit check - kept for backward compatibility
+   * @deprecated Use RateLimitService instead
+   */
   private async checkRateLimit(userId: string): Promise<boolean> {
-    const key = `rate_limit:${userId}:${new Date().toISOString().split('T')[0]}`;
-    const current = await this.redis.incr(key);
-
-    if (current === 1) {
-      await this.redis.expire(key, 86400); // 24 hours
-    }
-
-    // Max 100 tips per day per user
-    return current > 100;
-  }
-
-  private async checkKYCRequirements(
-    sender: any,
-    recipient: any,
-    amount: number
-  ): Promise<{ allowed: boolean; reason?: string }> {
-    // Get KYC levels
-    const [senderKYC, recipientKYC] = await Promise.all([
-      this.verychat.verifyKYC(sender?.verychatId || ''),
-      this.verychat.verifyKYC(recipient.id)
-    ]);
-
-    // Very Network KYC rules:
-    // Level 0: No KYC - can send/receive small amounts
-    // Level 1: Basic KYC - higher limits
-    // Level 2: Full KYC - no limits
-
-    const limits: Record<number, number> = {
-      0: 100,  // 100 VERY/USDC max without KYC
-      1: 1000, // 1000 VERY/USDC max with basic KYC
-      2: Infinity // No limit with full KYC
-    };
-
-    const senderLimit = limits[senderKYC.level] || 0;
-    const recipientLimit = limits[recipientKYC.level] || 0;
-
-    if (amount > senderLimit) {
-      return {
-        allowed: false,
-        reason: `Your KYC level (${senderKYC.level}) allows max ${senderLimit} VERY/USDC. Please complete KYC verification.`
-      };
-    }
-
-    if (amount > recipientLimit) {
-      return {
-        allowed: false,
-        reason: `Recipient's KYC level (${recipientKYC.level}) allows max ${recipientLimit} VERY/USDC.`
-      };
-    }
-
-    return { allowed: true };
+    const result = await this.rateLimitService.checkUserRateLimit(userId, 0);
+    return !result.allowed;
   }
 
   private getTokenAddress(token: 'VERY' | 'USDC'): string {

@@ -38,7 +38,7 @@ export interface ClaimRewardResult {
 export function getRewardsContract(
     signerOrProvider: ethers.Signer | ethers.Provider
 ): ethers.Contract {
-    const rewardsAddress = CONTRACTS.veryRewards?.address || process.env.VITE_VERY_REWARDS_CONTRACT_ADDRESS || '';
+    const rewardsAddress = CONTRACTS.veryRewards?.address || import.meta.env.VITE_VERY_REWARDS_CONTRACT_ADDRESS || '';
     
     if (!rewardsAddress || rewardsAddress === '0x0000000000000000000000000000000000000000') {
         throw new Error('VERY_REWARDS_CONTRACT_ADDRESS not configured');

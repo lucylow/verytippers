@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import ResponsiveNav from "./ResponsiveNav";
 import { cn } from "@/lib/utils";
+import { VeryLogo } from "./brand";
 
 export default function MobileShell({ children }: { children: React.ReactNode }) {
   const [navOpen, setNavOpen] = useState(false);
@@ -27,7 +28,7 @@ export default function MobileShell({ children }: { children: React.ReactNode })
               <path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </button>
-          <span className="text-lg font-semibold">VeryTippers</span>
+          <VeryLogo size="sm" variant="full" />
         </div>
 
         <div className="flex items-center gap-3">

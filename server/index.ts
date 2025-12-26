@@ -1028,6 +1028,187 @@ Return ONLY valid JSON matching the schema.`;
         }
     });
 
+    // --- Social Features API Endpoints ---
+    // Import SocialService - adjust path based on project structure
+    let SocialService: any;
+    try {
+        const socialModule = await import('../backend/src/services/social/SocialService');
+        SocialService = socialModule.SocialService;
+    } catch (error) {
+        // Fallback: try alternative path
+        try {
+            const socialModule = await import('./services/SocialService');
+            SocialService = socialModule.SocialService;
+        } catch (e) {
+            console.warn('SocialService not found, social features will be limited');
+            SocialService = null;
+        }
+    }
+    
+    const socialService = SocialService ? new SocialService() : null;
+
+    // Follow a user
+    app.post('/api/social/follow', async (req: Request, res: Response) => {
+        if (!socialService) {
+            return res.status(503).json({ success: false, error: 'Social service not available' });
+        }
+        try {
+            const { followerId, followingId } = req.body;
+            if (!followerId || !followingId) {
+                return res.status(400).json({ success: false, error: 'followerId and followingId are required' });
+            }
+            const result = await socialService.followUser(followerId, followingId);
+            res.status(result.success ? 200 : 400).json(result);
+        } catch (error: any) {
+            console.error('Error following user:', error);
+            res.status(500).json({ success: false, error: error.message || 'Failed to follow user' });
+        }
+    });
+
+    // Unfollow a user
+    app.post('/api/social/unfollow', async (req: Request, res: Response) => {
+        try {
+            const { followerId, followingId } = req.body;
+            if (!followerId || !followingId) {
+                return res.status(400).json({ success: false, error: 'followerId and followingId are required' });
+            }
+            const result = await socialService.unfollowUser(followerId, followingId);
+            res.status(result.success ? 200 : 400).json(result);
+        } catch (error: any) {
+            console.error('Error unfollowing user:', error);
+            res.status(500).json({ success: false, error: error.message || 'Failed to unfollow user' });
+        }
+    });
+
+    // Check if following
+    app.get('/api/social/following/:followerId/:followingId', async (req: Request, res: Response) => {
+        try {
+            const { followerId, followingId } = req.params;
+            const isFollowing = await socialService.isFollowing(followerId, followingId);
+            res.status(200).json({ success: true, isFollowing });
+        } catch (error: any) {
+            console.error('Error checking follow status:', error);
+            res.status(500).json({ success: false, error: error.message || 'Failed to check follow status' });
+        }
+    });
+
+    // Get followers
+    app.get('/api/social/followers/:userId', async (req: Request, res: Response) => {
+        try {
+            const { userId } = req.params;
+            const limit = parseInt(req.query.limit as string) || 50;
+            const offset = parseInt(req.query.offset as string) || 0;
+            const result = await socialService.getFollowers(userId, limit, offset);
+            res.status(200).json({ success: true, ...result });
+        } catch (error: any) {
+            console.error('Error fetching followers:', error);
+            res.status(500).json({ success: false, error: error.message || 'Failed to fetch followers' });
+        }
+    });
+
+    // Get following
+    app.get('/api/social/following/:userId', async (req: Request, res: Response) => {
+        try {
+            const { userId } = req.params;
+            const limit = parseInt(req.query.limit as string) || 50;
+            const offset = parseInt(req.query.offset as string) || 0;
+            const result = await socialService.getFollowing(userId, limit, offset);
+            res.status(200).json({ success: true, ...result });
+        } catch (error: any) {
+            console.error('Error fetching following:', error);
+            res.status(500).json({ success: false, error: error.message || 'Failed to fetch following' });
+        }
+    });
+
+    // Get activity feed
+    app.get('/api/social/feed/:userId', async (req: Request, res: Response) => {
+        try {
+            const { userId } = req.params;
+            const limit = parseInt(req.query.limit as string) || 20;
+            const offset = parseInt(req.query.offset as string) || 0;
+            const result = await socialService.getActivityFeed(userId, limit, offset);
+            res.status(200).json({ success: true, ...result });
+        } catch (error: any) {
+            console.error('Error fetching activity feed:', error);
+            res.status(500).json({ success: false, error: error.message || 'Failed to fetch activity feed' });
+        }
+    });
+
+    // Get user activities
+    app.get('/api/social/activities/:userId', async (req: Request, res: Response) => {
+        try {
+            const { userId } = req.params;
+            const limit = parseInt(req.query.limit as string) || 20;
+            const offset = parseInt(req.query.offset as string) || 0;
+            const result = await socialService.getUserActivities(userId, limit, offset);
+            res.status(200).json({ success: true, ...result });
+        } catch (error: any) {
+            console.error('Error fetching user activities:', error);
+            res.status(500).json({ success: false, error: error.message || 'Failed to fetch activities' });
+        }
+    });
+
+    // Get notifications
+    app.get('/api/social/notifications/:userId', async (req: Request, res: Response) => {
+        try {
+            const { userId } = req.params;
+            const limit = parseInt(req.query.limit as string) || 20;
+            const offset = parseInt(req.query.offset as string) || 0;
+            const unreadOnly = req.query.unreadOnly === 'true';
+            const result = await socialService.getNotifications(userId, limit, offset, unreadOnly);
+            res.status(200).json({ success: true, ...result });
+        } catch (error: any) {
+            console.error('Error fetching notifications:', error);
+            res.status(500).json({ success: false, error: error.message || 'Failed to fetch notifications' });
+        }
+    });
+
+    // Mark notification as read
+    app.post('/api/social/notifications/:notificationId/read', async (req: Request, res: Response) => {
+        try {
+            const { notificationId } = req.params;
+            const { userId } = req.body;
+            if (!userId) {
+                return res.status(400).json({ success: false, error: 'userId is required' });
+            }
+            await socialService.markNotificationRead(notificationId, userId);
+            res.status(200).json({ success: true, message: 'Notification marked as read' });
+        } catch (error: any) {
+            console.error('Error marking notification as read:', error);
+            res.status(500).json({ success: false, error: error.message || 'Failed to mark notification as read' });
+        }
+    });
+
+    // Mark all notifications as read
+    app.post('/api/social/notifications/read-all', async (req: Request, res: Response) => {
+        try {
+            const { userId } = req.body;
+            if (!userId) {
+                return res.status(400).json({ success: false, error: 'userId is required' });
+            }
+            await socialService.markAllNotificationsRead(userId);
+            res.status(200).json({ success: true, message: 'All notifications marked as read' });
+        } catch (error: any) {
+            console.error('Error marking all notifications as read:', error);
+            res.status(500).json({ success: false, error: error.message || 'Failed to mark all notifications as read' });
+        }
+    });
+
+    // Get user profile with social stats
+    app.get('/api/social/profile/:userId', async (req: Request, res: Response) => {
+        try {
+            const { userId } = req.params;
+            const profile = await socialService.getUserProfile(userId);
+            if (!profile) {
+                return res.status(404).json({ success: false, error: 'User not found' });
+            }
+            res.status(200).json({ success: true, profile });
+        } catch (error: any) {
+            console.error('Error fetching user profile:', error);
+            res.status(500).json({ success: false, error: error.message || 'Failed to fetch user profile' });
+        }
+    });
+
     // --- VeryChat Webhook Integration ---
     app.post('/webhook/verychat', async (req: Request, res: Response) => {
         try {

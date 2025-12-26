@@ -26,6 +26,16 @@ model User {
   // Token balances
   tokenBalances       Json      @default("{}")
   
+  // Social fields
+  bio                 String?
+  displayName         String?
+  location            String?
+  website             String?
+  socialLinks         Json?     // { twitter, github, etc }
+  followersCount      Int       @default(0)
+  followingCount      Int       @default(0)
+  isVerified          Boolean   @default(false)
+  
   // Relationships
   tipsSent            Tip[]     @relation("TipsSent")
   tipsReceived        Tip[]     @relation("TipsReceived")
@@ -34,6 +44,10 @@ model User {
   gasSponsorship      GasSponsorship?
   aiConversations     AIConversation[]
   voiceCommands       VoiceCommand[]
+  followers           Follow[]  @relation("UserFollowers")
+  following           Follow[]  @relation("UserFollowing")
+  activities          Activity[]
+  notifications       Notification[]
   
   // Timestamps
   createdAt           DateTime  @default(now())
@@ -445,4 +459,75 @@ model AdClick {
   @@index([adId])
   @@index([userId])
   @@index([createdAt])
+}
+
+// Social Features Models
+
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  follower    User     @relation("UserFollowers", fields: [followerId], references: [id], onDelete: Cascade)
+  followingId String
+  following   User     @relation("UserFollowing", fields: [followingId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+  @@index([createdAt])
+}
+
+model Activity {
+  id          String      @id @default(cuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        ActivityType
+  title       String
+  description String?
+  metadata    Json?       // { tipId, badgeId, etc }
+  isPublic    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+  @@index([isPublic])
+}
+
+enum ActivityType {
+  TIP_SENT
+  TIP_RECEIVED
+  BADGE_EARNED
+  FOLLOWED
+  LEADERBOARD_RANK
+  ACHIEVEMENT_UNLOCKED
+  PROFILE_UPDATE
+}
+
+model Notification {
+  id          String           @id @default(cuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        NotificationType
+  title       String
+  message     String
+  metadata    Json?            // { tipId, userId, actionUrl, etc }
+  read        Boolean          @default(false)
+  readAt      DateTime?
+  createdAt   DateTime         @default(now())
+  
+  @@index([userId])
+  @@index([read])
+  @@index([createdAt])
+  @@index([type])
+}
+
+enum NotificationType {
+  TIP_RECEIVED
+  TIP_CONFIRMED
+  NEW_FOLLOWER
+  MENTION
+  BADGE_EARNED
+  LEADERBOARD_UPDATE
+  SYSTEM
 }

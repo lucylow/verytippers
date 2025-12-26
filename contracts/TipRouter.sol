@@ -7,6 +7,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./VeryReputation.sol";
+import "./VeryStake.sol";
 
 /**
  * @title TipRouter - Gasless micro-tipping for VERY Chain
@@ -28,6 +29,9 @@ contract TipRouter is ReentrancyGuard, Ownable {
     
     /// @notice VeryReputation contract (optional)
     VeryReputation public reputation;
+    
+    /// @notice VeryStake contract (optional, for anti-spam)
+    address public stakeContract;
     
     /// @notice Replay protection: message hash → used status
     mapping(bytes32 => bool) public nonceUsed;
@@ -68,6 +72,7 @@ contract TipRouter is ReentrancyGuard, Ownable {
     error InvalidTipAmount();
     error InvalidAddresses();
     error NonceAlreadyUsed();
+    error InsufficientStake();
     
     // ========== MODIFIERS ==========
     
@@ -96,7 +101,7 @@ contract TipRouter is ReentrancyGuard, Ownable {
     
     /**
      * @notice Submit gasless tip via KMS-signed meta-transaction
-     * @dev EIP-191 signature verification + replay protection
+     * @dev EIP-191 signature verification + replay protection + VERY token transfer
      * @param from Tipper address
      * @param to Recipient address  
      * @param amount Tip amount in wei (VERY tokens)
@@ -130,7 +135,26 @@ contract TipRouter is ReentrancyGuard, Ownable {
         if (nonceUsed[messageHash]) revert NonceAlreadyUsed();
         nonceUsed[messageHash] = true;
         
-        // Business logic complete - emit event for indexer
+        // Anti-spam check: verify user has sufficient stake (if staking is enabled)
+        if (stakeContract != address(0)) {
+            VeryStake stake = VeryStake(stakeContract);
+            if (!stake.canTip(from)) {
+                revert InsufficientStake();
+            }
+            // Record tip block for rate limiting
+            stake.recordTipBlock(from);
+        }
+        
+        // Transfer VERY tokens from tipper to recipient
+        // Note: User must have approved TipRouter to spend their tokens
+        VERY.safeTransferFrom(from, to, amount);
+        
+        // Record tip in reputation system (if configured)
+        if (address(reputation) != address(0)) {
+            reputation.recordTip(from, to, amount);
+        }
+        
+        // Emit event for indexer
         emit TipSubmitted(cidHash, from, to, amount, nonce);
         unchecked {
             ++totalTips;
@@ -138,6 +162,22 @@ contract TipRouter is ReentrancyGuard, Ownable {
     }
     
     // ========== ADMIN FUNCTIONS ==========
+    
+    /**
+     * @notice Set VeryReputation contract address (owner only)
+     * @param _reputation VeryReputation contract address
+     */
+    function setReputation(address _reputation) external onlyOwner {
+        reputation = VeryReputation(_reputation);
+    }
+    
+    /**
+     * @notice Set VeryStake contract address (owner only)
+     * @param _stakeContract VeryStake contract address
+     */
+    function setStakeContract(address _stakeContract) external onlyOwner {
+        stakeContract = _stakeContract;
+    }
     
     /**
      * @notice Update relayer KMS signer (owner only)

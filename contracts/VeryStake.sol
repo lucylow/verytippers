@@ -29,6 +29,9 @@ contract VeryStake is Ownable {
     /// @notice Last tip block per user (for rate limiting)
     mapping(address => uint256) public lastTipBlock;
     
+    /// @notice Authorized contracts that can record tip blocks (e.g., TipRouter)
+    mapping(address => bool) public authorizedRecorders;
+    
     /// @notice Emitted when user stakes tokens
     event Staked(address indexed user, uint256 amount);
     
@@ -41,6 +44,12 @@ contract VeryStake is Ownable {
     error InsufficientStake();
     error ZeroAmount();
     error InvalidAddress();
+    error UnauthorizedRecorder();
+    
+    modifier onlyRecorder() {
+        if (!authorizedRecorders[msg.sender]) revert UnauthorizedRecorder();
+        _;
+    }
     
     /**
      * @dev Constructor
@@ -114,12 +123,20 @@ contract VeryStake is Ownable {
     }
     
     /**
+     * @notice Authorize a contract to record tip blocks (e.g., TipRouter)
+     * @param recorder Contract address
+     * @param authorized True to authorize, false to revoke
+     */
+    function setRecorder(address recorder, bool authorized) external onlyOwner {
+        if (recorder == address(0)) revert InvalidAddress();
+        authorizedRecorders[recorder] = authorized;
+    }
+    
+    /**
      * @notice Record tip block (called by TipRouter)
      * @param user User address
      */
-    function recordTipBlock(address user) external {
-        // Only authorized contracts can call this
-        // In production, add access control
+    function recordTipBlock(address user) external onlyRecorder {
         lastTipBlock[user] = block.number;
     }
 }

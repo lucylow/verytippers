@@ -14,6 +14,9 @@ import { useMessageModeration } from "@/hooks/useMessageModeration";
 import { Sparkles, Send, Loader2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AccessibleTipButton } from "@/components/accessibility";
+import { SignatureExplanation } from "@/components/accessibility";
+import { useTransactionAnnouncements } from "@/hooks/useTransactionAnnouncements";
 
 interface TipFormProps {
   senderId: string;
@@ -44,6 +47,7 @@ export function TipForm({
   const [showAIFeatures, setShowAIFeatures] = useState(!!content);
   const { result: moderationResult, isChecking: isModerating, moderateAndSend } = useMessageModeration();
   const { suggestions, isAnalyzing, suggestTipForMessage } = useAITipSuggestions();
+  const { announceTipSent, announceTransactionConfirmed, announceTransactionFailed } = useTransactionAnnouncements();
 
   const handleSendTip = async () => {
     // Validate amount
@@ -164,6 +168,8 @@ export function TipForm({
 
       // Handle response
       if (data.success) {
+        const recipientDisplay = recipientName || recipientId;
+        announceTipSent(`${amount} ${token}`, recipientDisplay, true); // gasless
         toast.success(`Tip of ${amount} ${token} sent successfully!`);
         setAmount("");
         setMessage("");
@@ -172,6 +178,7 @@ export function TipForm({
         }
       } else {
         const errorMsg = data.message || data.error || "Failed to send tip";
+        announceTransactionFailed(errorMsg);
         setError(errorMsg);
         toast.error(errorMsg);
       }
@@ -338,29 +345,39 @@ export function TipForm({
             </div>
           )}
 
-          <Button
-            onClick={handleSendTip}
-            disabled={loading || !amount || parseFloat(amount) <= 0 || isModerating || moderationResult?.action === 'block'}
-            className="w-full"
-            size="lg"
-          >
-            {loading || isModerating ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {isModerating ? 'Scanning message...' : 'Sending...'}
-              </>
-            ) : moderationResult?.action === 'block' ? (
-              <>
+          {/* Signature explanation before sending tip */}
+          {!loading && !isModerating && amount && parseFloat(amount) > 0 && moderationResult?.action !== 'block' && (
+            <SignatureExplanation 
+              action="tip"
+              context={`This will send ${amount} ${token} to ${recipientName || recipientId}.`}
+              variant="inline"
+            />
+          )}
+
+          {/* Accessible tip button with proper state handling */}
+          <div className="w-full">
+            {moderationResult?.action === 'block' ? (
+              <Button
+                disabled
+                className="w-full"
+                size="lg"
+                variant="destructive"
+              >
                 <AlertCircle className="mr-2 h-4 w-4" />
                 Message Blocked
-              </>
+              </Button>
             ) : (
-              <>
-                <Send className="mr-2 h-4 w-4" />
-                Send Tip
-              </>
+              <AccessibleTipButton
+                amount={amount || '0'}
+                recipient={recipientName || recipientId || 'recipient'}
+                onClick={handleSendTip}
+                disabled={loading || !amount || parseFloat(amount) <= 0 || isModerating}
+                loading={loading || isModerating}
+                gasless={true}
+                className="w-full"
+              />
             )}
-          </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

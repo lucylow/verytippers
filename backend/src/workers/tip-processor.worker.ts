@@ -7,6 +7,7 @@ import { LeaderboardService } from '../services/leaderboard.service';
 import { AIInsightsService } from '../services/ai-insights.service';
 import { Pool } from 'pg';
 import type { TipJobData } from '../types';
+import { circuitBreakers } from '../utils/circuitBreaker';
 
 /**
  * BullMQ Worker for processing tips in the background
@@ -77,23 +78,33 @@ export class TipProcessorWorker {
     });
 
     try {
-      // 1. Submit to VERY Chain relayer (gasless)
-      const txHash = await this.blockchainService.submitToRelayer(
-        senderId,
-        amount,
-        recipientId,
-        ipfsCid
-      );
+      // Update progress
+      await job.updateProgress(10);
 
-      // 2. Update leaderboards (Redis + PostgreSQL)
-      await this.leaderboardService.updateLeaderboards(
-        senderId,
-        recipientId,
-        amount,
-        ipfsCid
-      );
+      // 1. Submit to VERY Chain relayer (gasless) with circuit breaker
+      await job.updateProgress(20);
+      const txHash = await circuitBreakers.blockchain.execute(async () => {
+        return await this.blockchainService.submitToRelayer(
+          senderId,
+          amount,
+          recipientId,
+          ipfsCid
+        );
+      });
+
+      // 2. Update leaderboards (Redis + PostgreSQL) with circuit breaker
+      await job.updateProgress(50);
+      await circuitBreakers.database.execute(async () => {
+        await this.leaderboardService.updateLeaderboards(
+          senderId,
+          recipientId,
+          amount,
+          ipfsCid
+        );
+      });
 
       // 3. Generate AI insights (async, don't block)
+      await job.updateProgress(70);
       this.generateInsightsAsync(senderId).catch(err => {
         logger.error('Failed to generate insights', { error: err, userId: senderId });
       });

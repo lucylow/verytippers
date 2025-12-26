@@ -15,6 +15,12 @@ const Toaster = ({ ...props }: ToasterProps) => {
           "--normal-border": "var(--border)",
         } as React.CSSProperties
       }
+      toastOptions={{
+        // Enhanced accessibility for toasts
+        role: 'alert',
+        'aria-live': 'assertive',
+        'aria-atomic': true,
+      }}
       {...props}
     />
   );
