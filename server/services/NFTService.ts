@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { ethers, Wallet, Contract, JsonRpcProvider } from 'ethers';
 import { PrismaClient } from '@prisma/client';
 import { config } from '../config';

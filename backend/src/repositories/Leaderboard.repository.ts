@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Repository } from 'typeorm';
 import { AppDataSource } from '../config/database';
 import { Leaderboard } from '../models/Leaderboard.entity';

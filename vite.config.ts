@@ -25,8 +25,8 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
-    port: 5173,
-    strictPort: false, // Will find next available port if 5173 is busy
+    port: 8080,
+    strictPort: false,
     host: true, // allow external access (lovable)
     allowedHosts: [
       ".manuspre.computer",

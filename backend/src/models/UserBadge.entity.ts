@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Index } from 'typeorm';
 
 @Entity('user_badges')

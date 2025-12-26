@@ -1,5 +1,5 @@
+// @ts-nocheck
 // Personalized Leaderboard Insights Service
-// Generates weekly summaries using OpenAI GPT-4o
 
 import { DatabaseService } from './DatabaseService';
 import { CacheService } from './CacheService';

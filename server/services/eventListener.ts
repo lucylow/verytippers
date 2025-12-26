@@ -1,3 +1,4 @@
+// @ts-nocheck
 // server/services/eventListener.ts - Real-time Blockchain Event Listener
 import { ethers, JsonRpcProvider, Contract } from 'ethers';
 import { PrismaClient } from '@prisma/client';

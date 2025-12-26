@@ -159,8 +159,8 @@ export function useWepin(options?: UseWepinOptions) {
       }
 
       // Check if wallet is initialized, if not initialize it
-      const currentStatus = await wallet.getStatus().catch(() => 'not_initialized');
-      if (currentStatus === 'not_initialized') {
+      const initialStatus = await wallet.getStatus().catch(() => 'not_initialized' as WepinLifeCycle);
+      if (initialStatus === 'not_initialized') {
         await wallet.initialize({
           appId,
           appKey,
@@ -174,8 +174,8 @@ export function useWepin(options?: UseWepinOptions) {
       const acc = await wallet.connect(connectOptions);
       setAccount(acc);
       setIsConnected(true);
-      const currentStatus = await wallet.getStatus();
-      setStatus(currentStatus);
+      const newStatus = await wallet.getStatus();
+      setStatus(newStatus);
       return acc;
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to connect Wepin wallet';

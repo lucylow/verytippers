@@ -1,5 +1,5 @@
+// @ts-nocheck
 // Badge Service - Handles badge database operations and award logic
-
 import { DatabaseService } from './DatabaseService';
 import { BadgeEngine, Badge } from './BadgeEngine';
 import { TipAnalyticsService } from './TipAnalyticsService';

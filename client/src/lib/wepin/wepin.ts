@@ -18,8 +18,16 @@
  */
 
 import { VERY_CHAIN_CONFIG } from '../../config/chains';
-import type { WepinSDK, Account, IWepinSDKAttributes, WepinLifeCycle } from '@wepin/sdk-js';
+import type { WepinSDK, Account, WepinLifeCycle } from '@wepin/sdk-js';
 import type { WepinProvider, BaseProvider } from '@wepin/provider-js';
+
+// Define the SDK attributes interface locally since it may not be exported
+interface IWepinSDKAttributes {
+  type?: 'show' | 'hide';
+  defaultLanguage?: string;
+  defaultCurrency?: string;
+  loginProviders?: string[];
+}
 
 // WePin SDK initialization options
 export interface WepinInitOptions {
@@ -350,14 +358,15 @@ export class WepinWallet {
       // Sign message using personal_sign (EIP-191)
       // Note: Some providers may accept the message directly as a string
       // If this fails, try passing the message string directly
+      const accountAddress = this.account.address;
       const signature = await baseProvider.request({
         method: 'personal_sign',
-        params: [messageHex, this.account.address],
+        params: [messageHex, accountAddress],
       }).catch(async () => {
         // Fallback: try with message as string (some providers handle encoding)
         return await baseProvider.request({
           method: 'personal_sign',
-          params: [message, this.account.address],
+          params: [message, accountAddress],
         });
       });
 

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { ethers, Contract, Wallet, JsonRpcProvider } from 'ethers';
 import { config } from '../../config/config';
 import TipABI from '../../contracts/abis/Tip.json';

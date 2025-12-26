@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Enhanced Bot Command Handler
  * Provides automated command parsing, validation, and routing

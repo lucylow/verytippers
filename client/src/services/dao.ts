@@ -460,11 +460,17 @@ export class DAOService {
         }
       }
 
+      // Cast values to array of bigints
+      const valuesArg = parsed.args.values as any;
+      const valuesArray: bigint[] = Array.isArray(valuesArg) 
+        ? valuesArg.map((v: any) => BigInt(v))
+        : [];
+      
       return {
         proposalId,
         proposer: parsed.args.proposer,
         targets: parsed.args.targets,
-        values: parsed.args.values,
+        values: valuesArray,
         calldatas: parsed.args.calldatas,
         startBlock: parsed.args.startBlock,
         endBlock: parsed.args.endBlock,

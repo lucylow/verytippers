@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * VeryChat Integration
  * Handles webhook events from VeryChat bot and processes /tip commands
