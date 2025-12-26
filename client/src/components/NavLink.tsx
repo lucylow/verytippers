@@ -25,8 +25,12 @@ export function NavLink({
     ? location === href
     : location === href || (href !== "/" && location.startsWith(href));
   
+  // Check if this is a mobile link (has block class) or desktop link
+  const isMobileLink = className.includes("block");
+  
   const linkClasses = cn(
-    "transition-colors font-medium relative inline-block",
+    "transition-all font-medium relative",
+    isMobileLink ? "" : "inline-block",
     isActive 
       ? cn("text-foreground", activeClassName)
       : "text-muted-foreground hover:text-foreground",
@@ -36,7 +40,7 @@ export function NavLink({
   return (
     <Link href={href} className={linkClasses}>
       <span className="relative z-10">{children}</span>
-      {isActive && (
+      {isActive && !isMobileLink && (
         <span 
           className="absolute -bottom-1 left-0 right-0 h-0.5 bg-primary rounded-full"
           aria-hidden="true"

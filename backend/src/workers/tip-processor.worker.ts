@@ -392,18 +392,43 @@ export class TipProcessorWorker {
    * Add tip to processing queue
    */
   async addTipToQueue(data: TipJobData): Promise<string> {
-    const job = await this.queue.add('process-tip', data, {
-      priority: 1, // Normal priority
-      jobId: `tip-${data.senderId}-${data.recipientId}-${Date.now()}`
-    });
+    try {
+      // Validate job data
+      if (!data || !data.senderId || !data.recipientId) {
+        throw new Error('Invalid job data: senderId and recipientId are required');
+      }
 
-    logger.info('Tip added to queue', {
-      jobId: job.id,
-      senderId: data.senderId,
-      recipientId: data.recipientId
-    });
+      if (!data.amount || data.amount <= 0n) {
+        throw new Error('Invalid job data: amount must be greater than zero');
+      }
 
-    return job.id!;
+      const job = await this.queue.add('process-tip', data, {
+        priority: 1, // Normal priority
+        jobId: `tip-${data.senderId}-${data.recipientId}-${Date.now()}`
+      });
+
+      if (!job || !job.id) {
+        throw new Error('Failed to create job: job ID is missing');
+      }
+
+      logger.info('Tip added to queue', {
+        jobId: job.id,
+        senderId: data.senderId,
+        recipientId: data.recipientId
+      });
+
+      return job.id;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('Failed to add tip to queue', {
+        error: errorMessage,
+        data: {
+          senderId: data?.senderId,
+          recipientId: data?.recipientId
+        }
+      });
+      throw new Error(`Failed to add tip to queue: ${errorMessage}`);
+    }
   }
 
   /**

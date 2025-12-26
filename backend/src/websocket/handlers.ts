@@ -6,6 +6,7 @@ import type { WebSocketMessage } from '../types';
 type FastifyWebSocket = {
   send: (data: string) => void;
   on: (event: string, handler: (data?: any) => void) => void;
+  close: (code?: number, reason?: string) => void;
   readyState: number;
 };
 

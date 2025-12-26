@@ -269,11 +269,27 @@ class VeryTippersBackend {
           const { senderId, recipientId, amount, message } = request.body;
 
           // 1. Real-time moderation
-          const moderationResult: ModerationResult = await this.moderationService.moderateTipMessage(
-            message,
-            senderId,
-            recipientId
-          );
+          let moderationResult: ModerationResult;
+          try {
+            moderationResult = await this.moderationService.moderateTipMessage(
+              message,
+              senderId,
+              recipientId
+            );
+          } catch (moderationError) {
+            logger.error('Moderation service failed', {
+              error: moderationError,
+              senderId,
+              recipientId
+            });
+            // Continue with moderation - allow tip to proceed but log the failure
+            moderationResult = {
+              action: 'allow',
+              confidence: 0,
+              flags: [],
+              reason: 'Moderation service unavailable'
+            };
+          }
 
           if (moderationResult.action === 'block') {
             return reply.status(400).send({
@@ -284,15 +300,64 @@ class VeryTippersBackend {
           }
 
           // 2. Encrypt message payload
-          const encryptedPayload = await this.encryptionService.encryptMessage(message);
+          let encryptedPayload: any;
+          try {
+            encryptedPayload = await this.encryptionService.encryptMessage(message);
+          } catch (encryptionError) {
+            logger.error('Encryption failed', {
+              error: encryptionError,
+              senderId,
+              recipientId
+            });
+            return reply.status(500).send({
+              success: false,
+              error: 'Failed to encrypt message',
+              status: 'failed'
+            });
+          }
 
           // 3. Pin to IPFS
-          const ipfsCid = await this.ipfsService.pinEncryptedPayload(encryptedPayload);
+          let ipfsCid: string;
+          try {
+            ipfsCid = await this.ipfsService.pinEncryptedPayload(encryptedPayload);
+          } catch (ipfsError) {
+            logger.error('IPFS pin failed', {
+              error: ipfsError,
+              senderId,
+              recipientId
+            });
+            // Continue without IPFS CID - tip can still be processed
+            ipfsCid = '';
+            logger.warn('Continuing tip processing without IPFS CID');
+          }
 
           // 4. Queue for blockchain processing + indexing
-          const amountBigInt = typeof amount === 'string'
-            ? BigInt(Math.floor(parseFloat(amount) * 1e18))
-            : BigInt(Math.floor(amount * 1e18));
+          let amountBigInt: bigint;
+          try {
+            amountBigInt = typeof amount === 'string'
+              ? BigInt(Math.floor(parseFloat(amount) * 1e18))
+              : BigInt(Math.floor(amount * 1e18));
+
+            if (amountBigInt <= 0n) {
+              return reply.status(400).send({
+                success: false,
+                error: 'Amount must be greater than zero',
+                status: 'failed'
+              });
+            }
+          } catch (amountError) {
+            logger.error('Invalid amount', {
+              error: amountError,
+              amount,
+              senderId,
+              recipientId
+            });
+            return reply.status(400).send({
+              success: false,
+              error: 'Invalid amount format',
+              status: 'failed'
+            });
+          }
 
           const jobData: TipJobData = {
             senderId,
@@ -305,19 +370,41 @@ class VeryTippersBackend {
             message
           };
 
-          const jobId = await this.tipProcessor.addTipToQueue(jobData);
+          let jobId: string;
+          try {
+            jobId = await this.tipProcessor.addTipToQueue(jobData);
+          } catch (queueError) {
+            logger.error('Failed to add tip to queue', {
+              error: queueError,
+              senderId,
+              recipientId
+            });
+            return reply.status(500).send({
+              success: false,
+              error: 'Failed to queue tip for processing',
+              status: 'failed'
+            });
+          }
 
           // 5. Emit real-time update
-          this.wsManager.broadcast({
-            type: 'tip-queued',
-            data: {
-              senderId,
-              recipientId,
-              amount: typeof amount === 'string' ? parseFloat(amount) : amount,
-              message: '💸',
+          try {
+            this.wsManager.broadcast({
+              type: 'tip-queued',
+              data: {
+                senderId,
+                recipientId,
+                amount: typeof amount === 'string' ? parseFloat(amount) : amount,
+                message: '💸',
+                jobId
+              }
+            });
+          } catch (broadcastError) {
+            logger.warn('Failed to broadcast tip queued event', {
+              error: broadcastError,
               jobId
-            }
-          });
+            });
+            // Don't fail the request if broadcast fails
+          }
 
           const response: TipResponse = {
             success: true,
@@ -341,23 +428,46 @@ class VeryTippersBackend {
     this.fastify.get<{ Params: { period?: string }; Querystring: { limit?: number } }>(
       '/api/leaderboard/:period?',
       { schema: leaderboardSchema },
-      async (request) => {
+      async (request, reply) => {
         try {
           const period = (request.params.period || 'all') as 'all' | 'weekly';
           const limit = request.query.limit || 100;
+
+          // Validate limit
+          if (limit < 1 || limit > 1000) {
+            return reply.status(400).send({
+              success: false,
+              error: 'Limit must be between 1 and 1000'
+            });
+          }
 
           const leaderboardService = new LeaderboardService(this.redis, this.pgPool);
           const users = await leaderboardService.getLeaderboard(period, limit);
           const total = await leaderboardService.getTotalCount(period);
 
           return {
+            success: true,
             users,
             total,
             period
           };
         } catch (error: any) {
-          logger.error('Get leaderboard failed', { error });
-          throw error;
+          logger.error('Get leaderboard failed', {
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+            params: request.params,
+            query: request.query
+          });
+          
+          const appError = ErrorHandler.normalizeError(error, {
+            path: request.url,
+            method: request.method
+          });
+          
+          return reply.status(appError.statusCode).send({
+            success: false,
+            error: appError.message
+          });
         }
       }
     );
@@ -366,36 +476,77 @@ class VeryTippersBackend {
     this.fastify.get<{ Params: { userId: string } }>(
       '/api/users/:userId/stats',
       { schema: userStatsSchema },
-      async (request) => {
+      async (request, reply) => {
         try {
           const { userId } = request.params;
+
+          if (!userId || userId.trim().length === 0) {
+            return reply.status(400).send({
+              success: false,
+              error: 'User ID is required'
+            });
+          }
+
           const leaderboardService = new LeaderboardService(this.redis, this.pgPool);
           const stats = await leaderboardService.getUserStats(userId);
 
           if (!stats) {
-            return { error: 'User not found' };
+            return reply.status(404).send({
+              success: false,
+              error: 'User not found'
+            });
           }
 
           return {
+            success: true,
             ...stats,
             amountSent: Number(stats.amountSent) / 1e18,
             amountReceived: Number(stats.amountReceived) / 1e18,
             weeklyAmount: Number(stats.weeklyAmount) / 1e18
           };
         } catch (error: any) {
-          logger.error('Get user stats failed', { error });
-          throw error;
+          logger.error('Get user stats failed', {
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+            params: request.params
+          });
+          
+          const appError = ErrorHandler.normalizeError(error, {
+            path: request.url,
+            method: request.method
+          });
+          
+          return reply.status(appError.statusCode).send({
+            success: false,
+            error: appError.message
+          });
         }
       }
     );
 
     // Queue stats endpoint (admin)
-    this.fastify.get('/api/admin/queue-stats', async () => {
+    this.fastify.get('/api/admin/queue-stats', async (request, reply) => {
       try {
-        return await this.tipProcessor.getQueueStats();
+        const stats = await this.tipProcessor.getQueueStats();
+        return {
+          success: true,
+          ...stats
+        };
       } catch (error: any) {
-        logger.error('Get queue stats failed', { error });
-        throw error;
+        logger.error('Get queue stats failed', {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined
+        });
+        
+        const appError = ErrorHandler.normalizeError(error, {
+          path: request.url,
+          method: request.method
+        });
+        
+        return reply.status(appError.statusCode).send({
+          success: false,
+          error: appError.message
+        });
       }
     });
 
