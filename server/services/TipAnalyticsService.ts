@@ -67,7 +67,7 @@ export class TipAnalyticsService {
         let totalAmount = BigInt(0);
         const tokenMap: { [key: string]: { count: number; total: bigint } } = {};
 
-        tips.forEach(tip => {
+        tips.forEach((tip: TipWithRelations) => {
             const amount = BigInt(tip.amount);
             totalAmount += amount;
 
@@ -88,7 +88,7 @@ export class TipAnalyticsService {
 
         // Top tippers (by count)
         const tipperMap: { [key: string]: { count: number; total: bigint } } = {};
-        tips.forEach(tip => {
+        tips.forEach((tip: TipWithRelations) => {
             if (!tipperMap[tip.senderId]) {
                 tipperMap[tip.senderId] = { count: 0, total: BigInt(0) };
             }
@@ -107,7 +107,7 @@ export class TipAnalyticsService {
 
         // Top recipients
         const recipientMap: { [key: string]: { count: number; total: bigint } } = {};
-        tips.forEach(tip => {
+        tips.forEach((tip: TipWithRelations) => {
             if (!recipientMap[tip.recipientId]) {
                 recipientMap[tip.recipientId] = { count: 0, total: BigInt(0) };
             }
@@ -198,11 +198,11 @@ export class TipAnalyticsService {
         let totalSent = BigInt(0);
         let totalReceived = BigInt(0);
 
-        sentTips.forEach((tip: TipWithRelations) => {
+        sentTips.forEach((tip) => {
             totalSent += BigInt(tip.amount);
         });
 
-        receivedTips.forEach((tip: TipWithRelations) => {
+        receivedTips.forEach((tip) => {
             totalReceived += BigInt(tip.amount);
         });
 
@@ -211,7 +211,7 @@ export class TipAnalyticsService {
 
         // Favorite recipients
         const recipientMap: { [key: string]: { count: number; total: bigint } } = {};
-        sentTips.forEach((tip: TipWithRelations) => {
+        sentTips.forEach((tip) => {
             if (!recipientMap[tip.recipientId]) {
                 recipientMap[tip.recipientId] = { count: 0, total: BigInt(0) };
             }
@@ -230,7 +230,7 @@ export class TipAnalyticsService {
 
         // Favorite senders
         const senderMap: { [key: string]: { count: number; total: bigint } } = {};
-        receivedTips.forEach((tip: TipWithRelations) => {
+        receivedTips.forEach((tip) => {
             if (!senderMap[tip.senderId]) {
                 senderMap[tip.senderId] = { count: 0, total: BigInt(0) };
             }

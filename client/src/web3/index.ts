@@ -7,6 +7,6 @@ export * from "./config";
 export * from "./wallet";
 export * from "./metaTx";
 export * from "./submitRealTip";
-export * from "./submitMockTip";
+export { submitMockTip } from "./submitMockTip";
 export * from "./submitTip";
 

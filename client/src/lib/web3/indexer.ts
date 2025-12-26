@@ -140,6 +140,10 @@ export async function fetchPastTips(
     const events = await contract.queryFilter(filter, fromBlock, toBlock);
 
     return events.map((event) => {
+      // Type guard to check if event has args (EventLog vs Log)
+      if (!('args' in event) || !event.args) {
+        throw new Error('Event does not have args');
+      }
       const args = event.args as any;
       return {
         from: args.from,

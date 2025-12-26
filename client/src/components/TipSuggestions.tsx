@@ -44,27 +44,71 @@ export function TipSuggestions({
   const fetchSuggestions = async () => {
     setLoading(true);
     try {
-      const response = await fetch("/api/v1/tip/message-suggestions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          recipientName,
-          contentPreview,
-          tipAmount,
-        }),
-      });
+      // Create abort controller for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
 
-      const data = await response.json();
-      if (data.success) {
+      let response: Response;
+      try {
+        response = await fetch("/api/v1/tip/message-suggestions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            recipientName,
+            contentPreview,
+            tipAmount,
+          }),
+          signal: controller.signal,
+        });
+      } catch (fetchError: unknown) {
+        clearTimeout(timeoutId);
+        
+        if (fetchError instanceof Error && fetchError.name === "AbortError") {
+          toast.error("Request timed out. Please try again.");
+          return;
+        }
+        
+        if (fetchError instanceof TypeError && fetchError.message.includes("fetch")) {
+          toast.error("Network error. Please check your connection.");
+          return;
+        }
+        
+        throw fetchError;
+      }
+      
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorMessage = response.status === 429
+          ? "Too many requests. Please wait a moment."
+          : "Failed to load suggestions. Please try again.";
+        toast.error(errorMessage);
+        return;
+      }
+
+      let data: { success?: boolean; data?: MessageSuggestion[]; message?: string };
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        console.error("Failed to parse suggestions response:", parseError);
+        toast.error("Invalid response from server");
+        return;
+      }
+
+      if (data.success && data.data) {
         setSuggestions(data.data);
       } else {
-        toast.error("Failed to load suggestions");
+        const errorMsg = data.message || "Failed to load suggestions";
+        toast.error(errorMsg);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error fetching suggestions:", error);
-      toast.error("Error loading suggestions");
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : "An unexpected error occurred while loading suggestions";
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }

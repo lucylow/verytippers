@@ -3,20 +3,8 @@
  * Provides signer interface for both real wallet connections and mock fallback
  */
 
+/// <reference types="../vite-env" />
 import { ethers } from "ethers";
-
-// Extend Window interface for TypeScript
-declare global {
-  interface Window {
-    ethereum?: {
-      request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
-      send?: (method: string, params?: unknown[]) => Promise<unknown>;
-      on?: (event: string, handler: (...args: unknown[]) => void) => void;
-      removeListener?: (event: string, handler: (...args: unknown[]) => void) => void;
-      isMetaMask?: boolean;
-    };
-  }
-}
 
 export interface Signer {
   getAddress: () => Promise<string>;

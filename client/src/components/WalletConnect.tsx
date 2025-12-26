@@ -35,31 +35,81 @@ export const WalletConnect: React.FC<WalletConnectProps> = ({ className }) => {
     setWalletType(wallet);
     
     try {
-      // Step 1: Connect wallet
-      const accounts = await connectWallet(wallet);
-      if (!accounts?.[0]) {
-        throw new Error('No accounts returned from wallet');
+      // Step 1: Connect wallet with timeout
+      let accounts: string[] | null;
+      try {
+        accounts = await Promise.race([
+          connectWallet(wallet),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Wallet connection timed out')), 30000)
+          )
+        ]);
+      } catch (error: unknown) {
+        if (error instanceof Error) {
+          // Handle user rejection gracefully
+          if (error.message.includes('reject') || error.message.includes('denied') || error.message.includes('User rejected')) {
+            throw new Error('Connection rejected. Please approve the connection request in your wallet.');
+          }
+        }
+        throw error;
       }
 
-      // Step 2: Switch to VERY Chain
-      await switchToVeryChain();
+      if (!accounts?.[0]) {
+        throw new Error('No accounts returned from wallet. Please unlock your wallet and try again.');
+      }
 
-      // Step 3: Verify connection
+      // Step 2: Switch to VERY Chain with timeout
+      try {
+        await Promise.race([
+          switchToVeryChain(),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Network switch timed out')), 30000)
+          )
+        ]);
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error
+          ? error.message
+          : 'Failed to switch to VERY Chain';
+        
+        toast.error(`Network Switch Failed: ${errorMessage}`);
+        throw error;
+      }
+
+      // Step 3: Verify connection with timeout
       if (provider) {
-        const network = await provider.getNetwork();
-        if (Number(network.chainId) !== VERY_CHAIN_ID) {
-          toast.error(`Wrong Network: Please switch to VERY Chain (Chain ID: ${VERY_CHAIN_ID})`);
-          return;
+        try {
+          const network = await Promise.race([
+            provider.getNetwork(),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('Network verification timed out')), 10000)
+            )
+          ]);
+          
+          if (Number(network.chainId) !== VERY_CHAIN_ID) {
+            toast.error(`Wrong Network: Please switch to VERY Chain (Chain ID: ${VERY_CHAIN_ID})`);
+            return;
+          }
+        } catch (error: unknown) {
+          console.error('Failed to verify network:', error);
+          // Continue anyway, the network switch should have handled it
         }
       }
 
       toast.success(`Wallet Connected! Welcome back, ${accounts[0]?.slice(0, 6)}...${accounts[0]?.slice(-4)}`);
       
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Wallet connection failed:', error);
       
-      const errorMessage = error instanceof Error ? error.message : 'Connection failed';
-      toast.error(`Connection Failed: ${errorMessage}`);
+      let errorMessage = 'Connection failed';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      toast.error(`Connection Failed: ${errorMessage}`, {
+        duration: 5000,
+      });
     } finally {
       setIsConnecting(false);
       setWalletType(null);
@@ -68,19 +118,35 @@ export const WalletConnect: React.FC<WalletConnectProps> = ({ className }) => {
 
   const handleDisconnect = useCallback(async () => {
     try {
-      await disconnectWallet();
+      await Promise.race([
+        disconnectWallet(),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Disconnect timed out')), 10000)
+        )
+      ]);
+      
       toast.success('Wallet Disconnected: Your session has been cleared.');
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Disconnect failed:', error);
-      toast.error('Failed to disconnect wallet');
+      
+      const errorMessage = error instanceof Error
+        ? error.message
+        : 'Failed to disconnect wallet';
+      
+      toast.error(`Disconnect Failed: ${errorMessage}`, {
+        duration: 3000,
+      });
     }
   }, [disconnectWallet]);
 
   // Auto-reconnect on mount if previously connected
   useEffect(() => {
     if (isConnected && address) {
-      // Verify VERY Chain on reconnect
-      switchToVeryChain().catch(console.error);
+      // Verify VERY Chain on reconnect with error handling
+      switchToVeryChain().catch((error: unknown) => {
+        console.error('Failed to verify network on reconnect:', error);
+        // Don't show toast for auto-reconnect failures
+      });
     }
   }, [isConnected, address, switchToVeryChain]);
 

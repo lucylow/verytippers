@@ -25,9 +25,23 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    // Enhanced error logging
+    const errorDetails = {
+      message: error.message,
+      stack: error.stack,
+      componentStack: errorInfo.componentStack,
+      timestamp: new Date().toISOString(),
+      userAgent: navigator.userAgent,
+      url: window.location.href,
+    };
+
     // Log error to console in development
     if (import.meta.env.DEV) {
       console.error("ErrorBoundary caught an error:", error, errorInfo);
+      console.error("Error details:", errorDetails);
+    } else {
+      // In production, log minimal info
+      console.error("ErrorBoundary caught an error:", error.message);
     }
 
     // Store error info for display
@@ -44,6 +58,13 @@ class ErrorBoundary extends Component<Props, State> {
 
     // In production, you might want to send to an error reporting service
     // Example: Sentry.captureException(error, { contexts: { react: errorInfo } });
+    // Example with error details:
+    // if (import.meta.env.PROD) {
+    //   Sentry.captureException(error, {
+    //     contexts: { react: errorInfo },
+    //     extra: errorDetails,
+    //   });
+    // }
   }
 
   handleReset = () => {

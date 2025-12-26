@@ -4,19 +4,7 @@
  * Simulates transaction submission without requiring blockchain connection
  */
 
-export interface TipSubmissionResult {
-  txHash: string;
-  explorerUrl: string;
-  status: "pending" | "confirmed" | "failed";
-  receipt?: {
-    event: string;
-    from: string;
-    to: string;
-    amount: number;
-    cid: string;
-    blockNumber: number;
-  };
-}
+import type { TipSubmissionResult } from "./submitRealTip";
 
 /**
  * Submits a mock tip (fallback when real blockchain is unavailable)

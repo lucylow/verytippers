@@ -5,17 +5,7 @@
 
 import { VERY_CHAIN } from './config';
 
-declare global {
-  interface Window {
-    ethereum?: {
-      request: (args: { method: string; params?: any[] }) => Promise<any>;
-      on: (event: string, callback: (...args: any[]) => void) => void;
-      removeListener: (event: string, callback: (...args: any[]) => void) => void;
-      isMetaMask?: boolean;
-      isCoinbaseWallet?: boolean;
-    };
-  }
-}
+// Use the global Window type from vite-env.d.ts
 
 export interface NetworkStatus {
   isConnected: boolean;
@@ -96,7 +86,7 @@ export async function getNetworkStatus(): Promise<NetworkStatus> {
   }
 
   try {
-    const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
+    const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' }) as string;
     const chainId = parseInt(chainIdHex, 16);
     const isCorrectNetwork = chainId === VERY_CHAIN.chainId;
 
@@ -139,7 +129,8 @@ export function onNetworkChange(callback: (chainId: number) => void): () => void
     return () => {};
   }
 
-  const handleChainChanged = (chainIdHex: string) => {
+  const handleChainChanged = (...args: unknown[]) => {
+    const chainIdHex = args[0] as string;
     const chainId = parseInt(chainIdHex, 16);
     callback(chainId);
   };

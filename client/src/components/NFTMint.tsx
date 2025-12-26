@@ -160,7 +160,7 @@ export const NFTMint: React.FC = () => {
           </div>
         ) : tipsReceived !== null && rarity !== null ? (
           <div className="space-y-4">
-            <div className="p-4 bg-very-gray-900/50 rounded-lg border border-purple-500/20">
+            <div className="p-4 bg-slate-900/50 rounded-lg border border-purple-500/20">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-slate-400">Total Tips Received</span>
                 <span className="text-lg font-semibold text-white">

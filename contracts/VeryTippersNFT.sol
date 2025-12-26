@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 import "./TipRouter.sol";
 
 /**
@@ -14,6 +15,7 @@ import "./TipRouter.sol";
  */
 contract VeryTippersNFT is ERC721, ERC721URIStorage, Ownable {
     using Counters for Counters.Counter;
+    using Strings for uint256;
     
     // ========== STATE ==========
     
@@ -197,7 +199,7 @@ contract VeryTippersNFT is ERC721, ERC721URIStorage, Ownable {
     function _setTokenURI(uint256 tokenId, uint8 rarity) internal {
         string memory rarityStr = rarity == 0 ? "common" : rarity == 1 ? "rare" : rarity == 2 ? "epic" : "legendary";
         string memory baseURI = _baseURI();
-        string memory newURI = string(abi.encodePacked(baseURI, _tokenIdCounter.current().toString(), "-", rarityStr, ".json"));
+        string memory newURI = string(abi.encodePacked(baseURI, tokenId.toString(), "-", rarityStr, ".json"));
         _setTokenURI(tokenId, newURI);
     }
     

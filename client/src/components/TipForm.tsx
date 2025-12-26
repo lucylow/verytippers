@@ -36,13 +36,25 @@ export function TipForm({
   const [showAIFeatures, setShowAIFeatures] = useState(!!content);
 
   const handleSendTip = async () => {
-    if (!amount || parseFloat(amount) <= 0) {
-      setError("Please enter a valid amount");
+    // Validate amount
+    const amountNum = parseFloat(amount);
+    if (!amount || isNaN(amountNum) || amountNum <= 0) {
+      setError("Please enter a valid amount greater than 0");
+      toast.error("Please enter a valid amount");
       return;
     }
 
+    // Validate required fields
     if (!senderId || !recipientId || !token) {
-      setError("Missing required information");
+      setError("Missing required information. Please check your connection.");
+      toast.error("Missing required information");
+      return;
+    }
+
+    // Validate amount doesn't exceed reasonable limits
+    if (amountNum > 1000000) {
+      setError("Amount exceeds maximum limit");
+      toast.error("Amount is too large. Maximum is 1,000,000");
       return;
     }
 
@@ -50,22 +62,87 @@ export function TipForm({
     setError(null);
 
     try {
-      const response = await fetch("/api/v1/tip", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          senderId,
-          recipientId,
-          amount,
-          token,
-          message: message || undefined,
-        }),
-      });
+      // Create abort controller for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
-      const data = await response.json();
+      let response: Response;
+      try {
+        response = await fetch("/api/v1/tip", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            senderId,
+            recipientId,
+            amount,
+            token,
+            message: message || undefined,
+          }),
+          signal: controller.signal,
+        });
+      } catch (fetchError: unknown) {
+        clearTimeout(timeoutId);
+        
+        if (fetchError instanceof Error && fetchError.name === "AbortError") {
+          throw new Error("Request timed out. Please try again.");
+        }
+        
+        if (fetchError instanceof TypeError && fetchError.message.includes("fetch")) {
+          throw new Error("Network error. Please check your internet connection and try again.");
+        }
+        
+        throw fetchError;
+      }
+      
+      clearTimeout(timeoutId);
 
+      // Check if response is ok
+      if (!response.ok) {
+        let errorMessage = `Server error (${response.status})`;
+        let errorData: { message?: string; error?: string } = {};
+
+        try {
+          errorData = await response.json();
+          errorMessage = errorData.message || errorData.error || errorMessage;
+        } catch {
+          // If response is not JSON, try to get status text
+          errorMessage = response.statusText || errorMessage;
+        }
+
+        // Handle specific HTTP status codes
+        if (response.status === 400) {
+          errorMessage = errorData.message || "Invalid request. Please check your inputs.";
+        } else if (response.status === 401) {
+          errorMessage = "Authentication required. Please connect your wallet.";
+        } else if (response.status === 403) {
+          errorMessage = "Permission denied. You don't have access to perform this action.";
+        } else if (response.status === 404) {
+          errorMessage = "Endpoint not found. Please refresh the page.";
+        } else if (response.status === 429) {
+          errorMessage = "Too many requests. Please wait a moment and try again.";
+        } else if (response.status >= 500) {
+          errorMessage = "Server error. Our team has been notified. Please try again later.";
+        }
+
+        setError(errorMessage);
+        toast.error(errorMessage);
+        return;
+      }
+
+      // Parse response
+      let data: { success?: boolean; message?: string; data?: { tipId?: string }; error?: string };
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        setError("Invalid response from server. Please try again.");
+        toast.error("Invalid response from server");
+        console.error("Failed to parse response:", parseError);
+        return;
+      }
+
+      // Handle response
       if (data.success) {
         toast.success(`Tip of ${amount} ${token} sent successfully!`);
         setAmount("");
@@ -74,13 +151,22 @@ export function TipForm({
           onTipSent(data.data.tipId);
         }
       } else {
-        setError(data.message || "Failed to send tip");
-        toast.error(data.message || "Failed to send tip");
+        const errorMsg = data.message || data.error || "Failed to send tip";
+        setError(errorMsg);
+        toast.error(errorMsg);
       }
-    } catch (error) {
-      const errorMessage = "Network error. Please try again.";
+    } catch (error: unknown) {
+      let errorMessage = "An unexpected error occurred. Please try again.";
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === "string") {
+        errorMessage = error;
+      }
+
       setError(errorMessage);
       toast.error(errorMessage);
+      console.error("Tip submission error:", error);
     } finally {
       setLoading(false);
     }

@@ -38,19 +38,55 @@ export function TipRecommendation({
   const fetchRecommendation = async () => {
     setLoading(true);
     try {
-      const response = await fetch("/api/v1/tip/recommendation", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          content,
-          authorId,
-        }),
-      });
+      // Create abort controller for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
 
-      const data = await response.json();
-      if (data.success) {
+      let response: Response;
+      try {
+        response = await fetch("/api/v1/tip/recommendation", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            content,
+            authorId,
+          }),
+          signal: controller.signal,
+        });
+      } catch (fetchError: unknown) {
+        clearTimeout(timeoutId);
+        
+        if (fetchError instanceof Error && fetchError.name === "AbortError") {
+          console.warn("Recommendation request timed out");
+          return;
+        }
+        
+        if (fetchError instanceof TypeError && fetchError.message.includes("fetch")) {
+          console.error("Network error fetching recommendation:", fetchError);
+          return;
+        }
+        
+        throw fetchError;
+      }
+      
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        console.error(`Failed to fetch recommendation: ${response.status} ${response.statusText}`);
+        return;
+      }
+
+      let data: { success?: boolean; data?: Recommendation };
+      try {
+        data = await response.json();
+      } catch (parseError) {
+        console.error("Failed to parse recommendation response:", parseError);
+        return;
+      }
+
+      if (data.success && data.data) {
         setRecommendation(data.data);
       }
     } catch (error) {

@@ -210,6 +210,7 @@ async function submitMockTip({
 }
 
 // Re-export all utilities for convenience
+// Note: sendVeryTip and SendTipResult are already exported above
 export {
   // Network
   ensureVeryNetwork,

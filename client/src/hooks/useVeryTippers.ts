@@ -53,7 +53,7 @@ export const useVeryTippers = (): VeryTippersProvider => {
         throw new Error('Ethereum provider not found');
       }
 
-      const browserProvider = new ethers.BrowserProvider(window.ethereum);
+      const browserProvider = new ethers.BrowserProvider(window.ethereum as ethers.Eip1193Provider);
       const signerInstance = await browserProvider.getSigner();
       
       setProvider(browserProvider);
@@ -115,7 +115,8 @@ export const useVeryTippers = (): VeryTippersProvider => {
   useEffect(() => {
     if (!window.ethereum) return;
 
-    const handleAccountsChanged = (accounts: string[]) => {
+    const handleAccountsChanged = (...args: unknown[]) => {
+      const accounts = args[0] as string[];
       if (accounts.length === 0) {
         setIsConnected(false);
         setAddress(null);
@@ -123,7 +124,7 @@ export const useVeryTippers = (): VeryTippersProvider => {
         setAddress(accounts[0]);
         setIsConnected(true);
         // Update provider/signer when account changes
-        const browserProvider = new ethers.BrowserProvider(window.ethereum);
+        const browserProvider = new ethers.BrowserProvider(window.ethereum! as ethers.Eip1193Provider);
         browserProvider.getSigner().then((signerInstance) => {
           setProvider(browserProvider);
           setSigner(signerInstance);
@@ -139,8 +140,10 @@ export const useVeryTippers = (): VeryTippersProvider => {
     window.ethereum.on('chainChanged', handleChainChanged);
 
     return () => {
-      window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
-      window.ethereum.removeListener('chainChanged', handleChainChanged);
+      if (window.ethereum) {
+        window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+        window.ethereum.removeListener('chainChanged', handleChainChanged);
+      }
     };
   }, []);
 
