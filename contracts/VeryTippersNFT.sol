@@ -31,6 +31,16 @@ contract VeryTippersNFT is ERC721, ERC721URIStorage, Ownable {
     /// @notice Rarity tiers (0=Common, 1=Rare, 2=Epic, 3=Legendary)
     mapping(uint256 => uint8) public tokenRarity;
     
+    /**
+     * @notice Get rarity for a specific token (external view function)
+     * @param tokenId The token ID to query
+     * @return The rarity tier (0=Common, 1=Rare, 2=Epic, 3=Legendary)
+     */
+    function getTokenRarity(uint256 tokenId) external view returns (uint8) {
+        require(_exists(tokenId), "Token does not exist");
+        return tokenRarity[tokenId];
+    }
+    
     /// @notice Tip threshold per rarity (in wei) to mint special NFTs
     mapping(uint8 => uint256) public rarityTipThreshold;
     

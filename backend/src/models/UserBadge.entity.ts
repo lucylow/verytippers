@@ -3,26 +3,26 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Index } from 
 @Entity('user_badges')
 export class UserBadge {
   @PrimaryGeneratedColumn('uuid')
-  id: string;
+  id!: string;
 
   @Column()
   @Index()
-  userId: string;
+  userId!: string;
 
   @Column()
   @Index()
-  badgeId: string;
+  badgeId!: string;
 
   @Column()
-  badgeName: string;
+  badgeName!: string;
 
   @Column()
-  transactionHash: string;
+  transactionHash!: string;
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
-  earnedAt: Date;
+  earnedAt!: Date;
 
   @Column({ type: 'jsonb', nullable: true })
-  metadata: any;
+  metadata!: any;
 }
 

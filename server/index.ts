@@ -62,6 +62,9 @@ async function startServer() {
     // Rewards API routes
     app.use('/api/rewards', rewardsRouter);
 
+    // Error handler middleware (must be after all routes)
+    app.use(errorHandler);
+
     // Health Check Endpoint
     app.get('/health', (_req: Request, res: Response) => {
         res.status(200).json({
@@ -161,21 +164,16 @@ async function startServer() {
     }));
 
     // Get tip status
-    app.get('/api/v1/tip/:tipId', async (req: Request, res: Response) => {
+    app.get('/api/v1/tip/:tipId', asyncHandler(async (req: Request, res: Response) => {
         const { tipId } = req.params;
         
-        try {
-            const result = await tipService.getTipStatus(tipId);
-            if (result) {
-                res.status(200).json({ success: true, data: result });
-            } else {
-                res.status(404).json({ success: false, message: 'Tip not found' });
-            }
-        } catch (error) {
-            console.error('Error fetching tip status:', error);
-            res.status(500).json({ success: false, message: 'Internal server error' });
+        const result = await tipService.getTipStatus(tipId);
+        if (result) {
+            res.status(200).json({ success: true, data: result });
+        } else {
+            res.status(404).json({ success: false, message: 'Tip not found' });
         }
-    });
+    }));
 
     // AI-powered tip recommendation based on content (enhanced with OpenAI)
     app.post('/api/v1/tip/recommendation', async (req: Request, res: Response) => {
@@ -1244,4 +1242,7 @@ Return ONLY valid JSON matching the schema.`;
     });
 }
 
-startServer().catch(console.error);
+startServer().catch((error) => {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+});

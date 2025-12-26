@@ -109,7 +109,8 @@ export class SocialService {
 
       return { success: true, message: 'Successfully followed user' };
     } catch (error: any) {
-      console.error('Error following user:', error);
+      const { logger } = require('../../utils/logger');
+      logger.error('Error following user', { error, userId, targetUserId });
       return { success: false, message: error.message || 'Failed to follow user' };
     }
   }
@@ -150,7 +151,8 @@ export class SocialService {
 
       return { success: true, message: 'Successfully unfollowed user' };
     } catch (error: any) {
-      console.error('Error unfollowing user:', error);
+      const { logger } = require('../../utils/logger');
+      logger.error('Error unfollowing user', { error, userId, targetUserId });
       return { success: false, message: error.message || 'Failed to unfollow user' };
     }
   }

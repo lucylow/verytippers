@@ -119,7 +119,8 @@ export class CommandHandlerService {
 
       return result;
     } catch (error: any) {
-      console.error('Command execution error:', error);
+      const { logger } = require('../../utils/logger');
+      logger.error('Command execution error', { error, command, args });
       return {
         success: false,
         message: 'An error occurred while processing your command.',

@@ -228,7 +228,11 @@ contract VeryTippersDAO is
     ) {
         totalSupply_ = token().getPastTotalSupply(block.number);
         treasury_ = treasuryBalance;
-        activeProposals = proposalCount();
+        // Count active proposals (Pending, Active, Succeeded, Queued states)
+        // Note: OpenZeppelin Governor doesn't expose a direct proposalCount() function
+        // This is a simplified implementation - in production, use an off-chain indexer
+        // or maintain an on-chain counter
+        activeProposals = 0; // TODO: Implement proposal counting via indexer or state tracking
     }
     
     // ========== REQUIRED OVERRIDES ==========

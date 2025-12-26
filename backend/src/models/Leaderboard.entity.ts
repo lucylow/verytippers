@@ -3,16 +3,16 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeor
 @Entity('leaderboards')
 export class Leaderboard {
   @PrimaryGeneratedColumn('uuid')
-  id: string;
+  id!: string;
 
   @Column()
-  period: 'daily' | 'weekly' | 'monthly' | 'all_time';
+  period!: 'daily' | 'weekly' | 'monthly' | 'all_time';
 
   @Column()
-  category: 'tips_sent' | 'tips_received' | 'unique_tippers' | 'badge_collectors';
+  category!: 'tips_sent' | 'tips_received' | 'unique_tippers' | 'badge_collectors';
 
   @Column({ type: 'jsonb' })
-  rankings: Array<{
+  rankings!: Array<{
     userId: string;
     score: number;
     rank: number;
@@ -20,12 +20,12 @@ export class Leaderboard {
   }>;
 
   @Column({ type: 'timestamp' })
-  periodStart: Date;
+  periodStart!: Date;
 
   @Column({ type: 'timestamp' })
-  periodEnd: Date;
+  periodEnd!: Date;
 
   @CreateDateColumn()
-  calculatedAt: Date;
+  calculatedAt!: Date;
 }
 

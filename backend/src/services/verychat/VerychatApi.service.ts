@@ -88,12 +88,12 @@ export class VerychatApiService {
     this.apiStatus.isConfigured = !!(projectId && apiKey);
 
     if (!projectId || !apiKey) {
-      console.warn(
-        `⚠️  VeryChat API not fully configured.\n` +
-        `   Missing: ${!projectId ? 'VERYCHAT_PROJECT_ID' : ''}${!projectId && !apiKey ? ' and ' : ''}${!apiKey ? 'VERYCHAT_API_KEY' : ''}\n` +
-        `   📝 Register your project at: ${this.DEVELOPERS_PORTAL_URL}\n` +
-        `   📚 Documentation: ${this.DEVELOPERS_PORTAL_URL}`
-      );
+      const { logger } = require('../../utils/logger');
+      logger.warn('VeryChat API not fully configured', {
+        missingProjectId: !projectId,
+        missingApiKey: !apiKey,
+        developersPortal: this.DEVELOPERS_PORTAL_URL,
+      });
     }
 
     this.redis = redis;
@@ -145,36 +145,43 @@ export class VerychatApiService {
             config.__retryCount++;
             const retryAfter = error.response?.headers['retry-after'] || 60;
             const delay = this.RETRY_DELAY_BASE * Math.pow(2, config.__retryCount - 1);
-            console.warn(
-              `⚠️  Rate limit exceeded. Retrying in ${delay}ms (attempt ${config.__retryCount}/${this.MAX_RETRIES})`
-            );
+            const { logger } = require('../../utils/logger');
+            logger.warn('Rate limit exceeded, retrying', {
+              delay,
+              attempt: config.__retryCount,
+              maxRetries: this.MAX_RETRIES,
+              url: config?.url,
+            });
             await new Promise(resolve => setTimeout(resolve, delay));
             return this.client(config);
           }
         }
 
         // Enhanced error messages with helpful links
+        const { logger } = require('../../utils/logger');
         if (status === 401) {
-          console.error(
-            `❌ VeryChat API authentication failed.\n` +
-            `   Please verify your Project ID and API Key.\n` +
-            `   📝 Register/Update at: ${this.DEVELOPERS_PORTAL_URL}\n` +
-            `   📚 Documentation: ${this.DEVELOPERS_PORTAL_URL}`
-          );
+          logger.error('VeryChat API authentication failed', {
+            status,
+            url: config?.url,
+            developersPortal: this.DEVELOPERS_PORTAL_URL,
+          });
         } else if (status === 429) {
-          console.error(
-            `⚠️  VeryChat API rate limit exceeded.\n` +
-            `   Please wait before making more requests.\n` +
-            `   📚 Check quotas at: ${this.DEVELOPERS_PORTAL_URL}`
-          );
+          logger.warn('VeryChat API rate limit exceeded', {
+            status,
+            url: config?.url,
+            developersPortal: this.DEVELOPERS_PORTAL_URL,
+          });
         } else if (status === 404) {
-          console.warn(`⚠️  VeryChat API resource not found: ${config?.url}`);
+          logger.warn('VeryChat API resource not found', {
+            status,
+            url: config?.url,
+          });
         } else if (status >= 500) {
-          console.error(
-            `❌ VeryChat API server error (${status}).\n` +
-            `   Contact hackathon operations team for support.\n` +
-            `   📚 Support: ${this.DEVELOPERS_PORTAL_URL}`
-          );
+          logger.error('VeryChat API server error', {
+            status,
+            url: config?.url,
+            developersPortal: this.DEVELOPERS_PORTAL_URL,
+          });
         }
 
         return Promise.reject(error);
@@ -243,7 +250,8 @@ export class VerychatApiService {
       });
       return response.data;
     } catch (error) {
-      console.error('Error searching users:', error);
+      const { logger } = require('../../utils/logger');
+      logger.error('Error searching users', { error, username });
       return [];
     }
   }
@@ -278,7 +286,8 @@ export class VerychatApiService {
           };
         }
       } catch (error) {
-        console.warn('Error reading KYC cache from Redis:', error);
+        const { logger } = require('../../utils/logger');
+        logger.warn('Error reading KYC cache from Redis', { error, userId });
       }
     }
 
@@ -319,13 +328,15 @@ export class VerychatApiService {
             })
           );
         } catch (error) {
-          console.warn('Error caching KYC result in Redis:', error);
+          const { logger } = require('../../utils/logger');
+          logger.warn('Error caching KYC result in Redis', { error, userId });
         }
       }
 
       return result;
     } catch (error) {
-      console.error('Error verifying KYC:', error);
+      const { logger } = require('../../utils/logger');
+      logger.error('Error verifying KYC', { error, userId });
       
       // Return safe default, but don't cache errors
       return {
@@ -404,7 +415,8 @@ export class VerychatApiService {
       try {
         await this.redis.del(cacheKey);
       } catch (error) {
-        console.warn('Error invalidating KYC cache in Redis:', error);
+        const { logger } = require('../../utils/logger');
+        logger.warn('Error invalidating KYC cache in Redis', { error, userId });
       }
     }
   }
@@ -419,7 +431,8 @@ export class VerychatApiService {
       });
       return true;
     } catch (error) {
-      console.error('Error sending bot message:', error);
+      const { logger } = require('../../utils/logger');
+      logger.error('Error sending bot message', { error, chatId });
       return false;
     }
   }
@@ -442,7 +455,8 @@ export class VerychatApiService {
     try {
       await this.client.post('/hackathon/bot/commands', { commands });
     } catch (error) {
-      console.error('Error setting bot commands:', error);
+      const { logger } = require('../../utils/logger');
+      logger.error('Error setting bot commands', { error });
     }
   }
 
@@ -466,7 +480,8 @@ export class VerychatApiService {
       });
       return response.data || [];
     } catch (error) {
-      console.error('Error searching users:', error);
+      const { logger } = require('../../utils/logger');
+      logger.error('Error searching users', { error, query, limit });
       return [];
     }
   }
@@ -495,7 +510,8 @@ export class VerychatApiService {
       await this.client.post('/hackathon/bot/messages', payload);
       return true;
     } catch (error) {
-      console.error('Error sending rich message:', error);
+      const { logger } = require('../../utils/logger');
+      logger.error('Error sending rich message', { error, chatId });
       return false;
     }
   }
@@ -513,7 +529,8 @@ export class VerychatApiService {
       });
       return true;
     } catch (error) {
-      console.error('Error editing message:', error);
+      const { logger } = require('../../utils/logger');
+      logger.error('Error editing message', { error, chatId, messageId });
       return false;
     }
   }
@@ -530,7 +547,8 @@ export class VerychatApiService {
       });
       return true;
     } catch (error) {
-      console.error('Error answering callback query:', error);
+      const { logger } = require('../../utils/logger');
+      logger.error('Error answering callback query', { error, callbackQueryId });
       return false;
     }
   }
@@ -548,7 +566,8 @@ export class VerychatApiService {
         await this.handleInlineQuery(payload.inline_query);
         break;
       default:
-        console.log('Unhandled webhook type:', payload.type);
+        const { logger } = require('../../utils/logger');
+        logger.debug('Unhandled webhook type', { type: payload.type });
     }
   }
 
@@ -562,15 +581,18 @@ export class VerychatApiService {
     
     // Route to appropriate command handler
     // These would be handled by the webhook controller
-    console.log(`Received command: ${command} with args: ${args}`);
+    const { logger } = require('../../utils/logger');
+    logger.debug('Received command', { command, args });
   }
 
   private async handleCallbackQuery(callbackQuery: any): Promise<void> {
-    console.log('Callback query received:', callbackQuery);
+    const { logger } = require('../../utils/logger');
+    logger.debug('Callback query received', { callbackQuery });
   }
 
   private async handleInlineQuery(inlineQuery: any): Promise<void> {
-    console.log('Inline query received:', inlineQuery);
+    const { logger } = require('../../utils/logger');
+    logger.debug('Inline query received', { inlineQuery });
   }
 
   /**

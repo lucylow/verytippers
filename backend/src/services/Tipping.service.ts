@@ -152,7 +152,8 @@ export class TippingService {
       if (!abuseCheck.allowed) {
         // Log high-severity abuse attempts
         if (abuseCheck.severity === 'high' || abuseCheck.severity === 'critical') {
-          console.warn('Abuse detected:', {
+          const { logger } = require('../utils/logger');
+          logger.warn('Abuse detected', {
             senderId: request.senderId,
             recipientId: recipientUser.id,
             amount: request.amount,
@@ -220,7 +221,10 @@ export class TippingService {
 
       // 11. Check and award badges (async, don't wait)
       setTimeout(() => {
-        this.veryChain.checkAndAwardBadges(senderWallet).catch(console.error);
+        this.veryChain.checkAndAwardBadges(senderWallet).catch((error) => {
+          const { logger } = require('../utils/logger');
+          logger.error('Error checking and awarding badges', { error, senderWallet });
+        });
       }, 5000);
 
       // 12. Send notification
@@ -234,10 +238,19 @@ export class TippingService {
       };
 
     } catch (error: any) {
-      console.error('Error processing tip:', error);
+      const { logger } = require('../utils/logger');
+      const { ErrorHandler } = require('../utils/errors');
+      
+      const appError = ErrorHandler.normalizeError(error, {
+        userId: request.senderId,
+        action: 'process_tip',
+      });
+      
+      ErrorHandler.logError(appError);
+      
       return {
         success: false,
-        error: error.message || 'Failed to process tip'
+        error: appError.message || 'Failed to process tip'
       };
     }
   }
@@ -277,7 +290,8 @@ export class TippingService {
 
       return response.data.Hash;
     } catch (error) {
-      console.error('Error uploading to IPFS:', error);
+      const { logger } = require('../utils/logger');
+      logger.error('Error uploading to IPFS', { error, recipientId });
       // Return empty hash if IPFS fails - in production, you might want to retry or use a different IPFS service
       return '';
     }

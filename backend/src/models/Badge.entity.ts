@@ -3,19 +3,19 @@ import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 @Entity('badges')
 export class Badge {
   @PrimaryGeneratedColumn('uuid')
-  id: string;
+  id!: string;
 
   @Column()
-  name: string;
+  name!: string;
 
   @Column()
-  description: string;
+  description!: string;
 
   @Column()
-  imageUrl: string;
+  imageUrl!: string;
 
   @Column({ type: 'jsonb' })
-  requirements: {
+  requirements!: {
     minTipsSent?: number;
     minTipsReceived?: number;
     minUniqueUsers?: number;
@@ -24,12 +24,12 @@ export class Badge {
   };
 
   @Column({ default: false })
-  isCommunityFunded: boolean;
+  isCommunityFunded!: boolean;
 
   @Column({ type: 'decimal', precision: 36, scale: 18, default: '0' })
-  poolBalance: string;
+  poolBalance!: string;
 
   @Column({ default: 0 })
-  totalMinted: number;
+  totalMinted!: number;
 }
 

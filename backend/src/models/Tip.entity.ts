@@ -3,42 +3,42 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Index } from 
 @Entity('tips')
 export class Tip {
   @PrimaryGeneratedColumn('uuid')
-  id: string;
+  id!: string;
 
   @Column()
   @Index()
-  senderId: string;
+  senderId!: string;
 
   @Column()
   @Index()
-  recipientId: string;
+  recipientId!: string;
 
   @Column()
-  tokenAddress: string;
+  tokenAddress!: string;
 
   @Column({ type: 'decimal', precision: 36, scale: 18 })
-  amount: string;
+  amount!: string;
 
   @Column({ nullable: true })
-  messageHash: string; // IPFS hash
+  messageHash!: string | null; // IPFS hash
 
   @Column({ nullable: true })
-  messageEncrypted: string; // Encrypted message for recipient
+  messageEncrypted!: string | null; // Encrypted message for recipient
 
   @Column()
-  transactionHash: string;
+  transactionHash!: string;
 
   @Column({ nullable: true })
-  blockNumber: number;
+  blockNumber!: number | null;
 
   @Column({ default: 'pending' })
-  status: 'pending' | 'confirmed' | 'failed';
+  status!: 'pending' | 'confirmed' | 'failed';
 
   @Column({ type: 'jsonb', nullable: true })
-  metadata: any;
+  metadata!: any;
 
   @CreateDateColumn()
   @Index()
-  createdAt: Date;
+  createdAt!: Date;
 }
 

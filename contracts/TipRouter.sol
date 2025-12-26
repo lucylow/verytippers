@@ -100,6 +100,63 @@ contract TipRouter is ReentrancyGuard, Ownable {
     // ========== CORE FUNCTIONALITY ==========
     
     /**
+     * @notice Execute meta-transaction (EIP-712 compatible)
+     * @dev Verifies user signature and executes tip transfer
+     * Note: This is a simplified version - in production, use submitTip with relayer signature
+     */
+    function executeMetaTransaction(
+        address sender,
+        address recipient,
+        uint256 amount,
+        string calldata ipfsCid,
+        bytes calldata signature
+    ) external nonReentrant {
+        // Validate inputs
+        if (sender == address(0) || recipient == address(0)) revert InvalidAddresses();
+        if (amount == 0) revert InvalidTipAmount();
+        if (sender == recipient) revert InvalidAddresses();
+        
+        // Convert string CID to bytes32 hash
+        bytes32 cidHash = keccak256(bytes(ipfsCid));
+        
+        // Generate deterministic nonce from sender and block
+        uint256 nonce = uint256(keccak256(abi.encodePacked(block.number, sender, recipient, amount, cidHash)));
+        
+        // Replay protection
+        bytes32 messageHash = keccak256(abi.encodePacked(sender, recipient, amount, cidHash, nonce));
+        if (nonceUsed[messageHash]) revert NonceAlreadyUsed();
+        nonceUsed[messageHash] = true;
+        
+        // Verify user signature (EIP-191)
+        bytes32 ethSignedHash = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash));
+        require(signature.length == 65, "Invalid signature length");
+        bytes32 r;
+        bytes32 s;
+        uint8 v;
+        assembly {
+            r := mload(add(signature, 32))
+            s := mload(add(signature, 64))
+            v := byte(0, mload(add(signature, 96)))
+        }
+        address recovered = ethSignedHash.recover(v, r, s);
+        require(recovered == sender, "Invalid signature");
+        
+        // Transfer VERY tokens from sender to recipient
+        VERY.safeTransferFrom(sender, recipient, amount);
+        
+        // Record tip in reputation system (if configured)
+        if (address(reputation) != address(0)) {
+            reputation.recordTip(sender, recipient, amount);
+        }
+        
+        // Emit event for indexer
+        emit TipSubmitted(cidHash, sender, recipient, amount, nonce);
+        unchecked {
+            ++totalTips;
+        }
+    }
+    
+    /**
      * @notice Submit gasless tip via KMS-signed meta-transaction
      * @dev EIP-191 signature verification + replay protection + VERY token transfer
      * @param from Tipper address
@@ -121,7 +178,7 @@ contract TipRouter is ReentrancyGuard, Ownable {
         bytes32 r,
         bytes32 s
     ) 
-        external 
+        public 
         nonReentrant 
         onlyRelayer(keccak256(abi.encodePacked(from, to, amount, cidHash, nonce)), v, r, s)
     {

@@ -3,46 +3,46 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateCol
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn('uuid')
-  id: string;
+  id!: string;
 
   @Column({ unique: true })
   @Index()
-  verychatId: string;
+  verychatId!: string;
 
   @Column({ nullable: true })
-  username: string;
+  username!: string | null;
 
   @Column()
-  walletAddress: string;
+  walletAddress!: string;
 
   @Column({ default: false })
-  isKycVerified: boolean;
+  isKycVerified!: boolean;
 
   @Column({ type: 'jsonb', nullable: true })
-  kycMetadata: any;
+  kycMetadata!: any;
 
   @Column({ default: 0 })
-  totalTipsSent: number; // in smallest unit
+  totalTipsSent!: number; // in smallest unit
 
   @Column({ default: 0 })
-  totalTipsReceived: number;
+  totalTipsReceived!: number;
 
   @Column({ default: 0 })
-  uniqueUsersTipped: number;
+  uniqueUsersTipped!: number;
 
   @Column({ default: 0 })
-  tipStreak: number; // consecutive days of tipping
+  tipStreak!: number; // consecutive days of tipping
 
   @Column({ type: 'timestamp', nullable: true })
-  lastTipDate: Date;
+  lastTipDate!: Date | null;
 
   @Column({ type: 'jsonb', default: {} })
-  tokenBalances: Record<string, number>; // token address -> balance
+  tokenBalances!: Record<string, number>; // token address -> balance
 
   @CreateDateColumn()
-  createdAt: Date;
+  createdAt!: Date;
 
   @UpdateDateColumn()
-  updatedAt: Date;
+  updatedAt!: Date;
 }
 

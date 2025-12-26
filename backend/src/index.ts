@@ -10,6 +10,7 @@ import { Pool } from 'pg';
 import Redis from 'ioredis';
 import { config } from './config/config';
 import { logger } from './utils/logger';
+import { ErrorHandler, NotFoundError } from './utils/errors';
 
 // Services
 import { EncryptionService } from './services/encryption.service';
@@ -392,8 +393,6 @@ class VeryTippersBackend {
    */
   private setupErrorHandlers(): void {
     this.fastify.setErrorHandler((error, request, reply) => {
-      const { ErrorHandler, AppError, NotFoundError } = require('./utils/errors');
-      
       // Normalize error to AppError
       const appError = ErrorHandler.normalizeError(error, {
         path: request.url,
@@ -419,8 +418,6 @@ class VeryTippersBackend {
     });
 
     this.fastify.setNotFoundHandler((request, reply) => {
-      const { ErrorHandler, NotFoundError } = require('./utils/errors');
-      
       const error = new NotFoundError('Route', {
         path: request.url,
         method: request.method,
