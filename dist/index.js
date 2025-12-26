@@ -29,13 +29,13 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 import * as dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
-var __filename, __dirname, config3;
+var __filename, __dirname, config2;
 var init_config = __esm({
   "server/config.ts"() {
     __filename = fileURLToPath(import.meta.url);
     __dirname = path.dirname(__filename);
     dotenv.config({ path: path.resolve(__dirname, "../../.env") });
-    config3 = {
+    config2 = {
       // Server
       NODE_ENV: process.env.NODE_ENV || "development",
       PORT: parseInt(process.env.PORT || "3001"),
@@ -106,15 +106,15 @@ var init_BlockchainService = __esm({
       tipContract;
       badgeContract;
       constructor() {
-        this.provider = new JsonRpcProvider(config3.VERY_CHAIN_RPC_URL);
-        this.relayerWallet = new Wallet(config3.SPONSOR_PRIVATE_KEY, this.provider);
+        this.provider = new JsonRpcProvider(config2.VERY_CHAIN_RPC_URL);
+        this.relayerWallet = new Wallet(config2.SPONSOR_PRIVATE_KEY, this.provider);
         this.tipContract = new Contract(
-          config3.TIP_CONTRACT_ADDRESS,
+          config2.TIP_CONTRACT_ADDRESS,
           TIP_CONTRACT_ABI,
           this.relayerWallet
         );
         this.badgeContract = new Contract(
-          config3.BADGE_CONTRACT_ADDRESS,
+          config2.BADGE_CONTRACT_ADDRESS,
           BADGE_CONTRACT_ABI,
           this.relayerWallet
         );
@@ -160,7 +160,7 @@ var init_CacheService = __esm({
       client;
       constructor() {
         this.client = createClient({
-          url: config3.REDIS_URL
+          url: config2.REDIS_URL
         });
         this.client.on("error", (err) => console.error("Redis Client Error", err));
         this.client.connect().catch((err) => console.error("Failed to connect to Redis", err));
@@ -197,7 +197,7 @@ var init_HuggingFaceService = __esm({
       client;
       cache;
       constructor() {
-        this.client = new HfInference(config3.HUGGINGFACE_API_KEY);
+        this.client = new HfInference(config2.HUGGINGFACE_API_KEY);
         this.cache = CacheService.getInstance();
       }
       getScore(result, label) {
@@ -516,14 +516,14 @@ var init_AIService = __esm({
         this.initializeOpenAI();
       }
       async initializeOpenAI() {
-        if (!config3.OPENAI_API_KEY || config3.OPENAI_API_KEY === "") {
+        if (!config2.OPENAI_API_KEY || config2.OPENAI_API_KEY === "") {
           console.log("OpenAI API key not configured. Using Hugging Face models only.");
           return;
         }
         try {
           const openaiModule = await import("openai");
           const OpenAI = openaiModule.default || openaiModule;
-          this.openai = new OpenAI({ apiKey: config3.OPENAI_API_KEY });
+          this.openai = new OpenAI({ apiKey: config2.OPENAI_API_KEY });
           this.openaiAvailable = true;
           console.log("OpenAI initialized successfully");
         } catch (error) {
@@ -536,7 +536,7 @@ var init_AIService = __esm({
        * Uses GPT-4 if available, falls back to Hugging Face models
        */
       async generateTipSuggestion(chatContext, context) {
-        if (!this.openai && config3.OPENAI_API_KEY && config3.OPENAI_API_KEY !== "") {
+        if (!this.openai && config2.OPENAI_API_KEY && config2.OPENAI_API_KEY !== "") {
           await this.initializeOpenAI();
         }
         const cacheKey = `ai:tip-suggestion:${Buffer.from(chatContext + JSON.stringify(context || {})).toString("base64").slice(0, 80)}`;
@@ -548,7 +548,7 @@ var init_AIService = __esm({
           if (this.openaiAvailable && this.openai) {
             const prompt = this.buildTipSuggestionPrompt(chatContext, context);
             const completion = await this.openai.chat.completions.create({
-              model: config3.OPENAI_MODEL || "gpt-4o-mini",
+              model: config2.OPENAI_MODEL || "gpt-4o-mini",
               messages: [
                 {
                   role: "system",
@@ -682,7 +682,7 @@ Return a JSON object with this exact structure:
        * Generate personalized leaderboard insights
        */
       async generateLeaderboardInsight(userId2, analytics) {
-        if (!this.openai && config3.OPENAI_API_KEY && config3.OPENAI_API_KEY !== "") {
+        if (!this.openai && config2.OPENAI_API_KEY && config2.OPENAI_API_KEY !== "") {
           await this.initializeOpenAI();
         }
         const cacheKey = `ai:leaderboard-insight:${userId2}`;
@@ -694,7 +694,7 @@ Return a JSON object with this exact structure:
           if (this.openaiAvailable && this.openai) {
             const prompt = this.buildLeaderboardInsightPrompt(userId2, analytics);
             const completion = await this.openai.chat.completions.create({
-              model: config3.OPENAI_MODEL || "gpt-4o-mini",
+              model: config2.OPENAI_MODEL || "gpt-4o-mini",
               messages: [
                 {
                   role: "system",
@@ -882,8 +882,8 @@ var init_VerychatService = __esm({
       baseUrl;
       apiKey;
       constructor() {
-        this.baseUrl = config3.VERYCHAT_API_URL || "https://api.verychat.io/v1";
-        this.apiKey = config3.VERYCHAT_API_KEY || "";
+        this.baseUrl = config2.VERYCHAT_API_URL || "https://api.verychat.io/v1";
+        this.apiKey = config2.VERYCHAT_API_KEY || "";
       }
       async getUser(userId2) {
         try {
@@ -938,11 +938,11 @@ var init_IpfsService = __esm({
         const ipfsMode = (process.env.IPFS_MODE || "mock").toLowerCase();
         if (ipfsMode === "mock") {
           this.provider = "mock";
-        } else if (ipfsMode === "pinata" && config3.PINATA_API_KEY && config3.PINATA_SECRET_API_KEY) {
+        } else if (ipfsMode === "pinata" && config2.PINATA_API_KEY && config2.PINATA_SECRET_API_KEY) {
           this.provider = "pinata";
-        } else if (ipfsMode === "infura" && config3.IPFS_PROJECT_ID && config3.IPFS_PROJECT_SECRET) {
+        } else if (ipfsMode === "infura" && config2.IPFS_PROJECT_ID && config2.IPFS_PROJECT_SECRET) {
           this.provider = "infura";
-          const auth = "Basic " + Buffer.from(config3.IPFS_PROJECT_ID + ":" + config3.IPFS_PROJECT_SECRET).toString("base64");
+          const auth = "Basic " + Buffer.from(config2.IPFS_PROJECT_ID + ":" + config2.IPFS_PROJECT_SECRET).toString("base64");
           this.client = create({
             host: "ipfs.infura.io",
             port: 5001,
@@ -952,7 +952,7 @@ var init_IpfsService = __esm({
             }
           });
         } else {
-          if (config3.PINATA_API_KEY && config3.PINATA_SECRET_API_KEY) {
+          if (config2.PINATA_API_KEY && config2.PINATA_SECRET_API_KEY) {
             this.provider = "pinata";
           } else {
             this.provider = "mock";
@@ -990,8 +990,8 @@ var init_IpfsService = __esm({
        * Documentation: https://docs.pinata.cloud/api-pinning/pin-json
        */
       async uploadToPinata(content) {
-        const pinataApiKey = config3.PINATA_API_KEY;
-        const pinataSecret = config3.PINATA_SECRET_API_KEY;
+        const pinataApiKey = config2.PINATA_API_KEY;
+        const pinataSecret = config2.PINATA_SECRET_API_KEY;
         if (!pinataApiKey || !pinataSecret) {
           console.warn("Pinata credentials not configured, returning mock hash");
           return `ipfs://mockhash_${Date.now()}`;
@@ -1021,7 +1021,7 @@ var init_IpfsService = __esm({
           return `ipfs://${cid}`;
         } catch (error) {
           console.error("Error uploading to Pinata:", error.response?.data || error.message);
-          if (config3.NODE_ENV === "development") {
+          if (config2.NODE_ENV === "development") {
             console.warn("Falling back to mock hash in development");
             return `ipfs://mockhash_${Date.now()}`;
           }
@@ -1037,8 +1037,8 @@ var init_IpfsService = __esm({
         if (this.provider !== "pinata") {
           throw new Error("File upload currently only supported with Pinata provider");
         }
-        const pinataApiKey = config3.PINATA_API_KEY;
-        const pinataSecret = config3.PINATA_SECRET_API_KEY;
+        const pinataApiKey = config2.PINATA_API_KEY;
+        const pinataSecret = config2.PINATA_SECRET_API_KEY;
         if (!pinataApiKey || !pinataSecret) {
           console.warn("Pinata credentials not configured, returning mock hash");
           return `ipfs://mockhash_${Date.now()}`;
@@ -1085,9 +1085,9 @@ var init_IpfsService = __esm({
        */
       async fetch(hash) {
         const cleanHash = hash.replace("ipfs://", "").replace("/ipfs/", "");
-        if (this.provider === "pinata" && config3.PINATA_GATEWAY_URL) {
+        if (this.provider === "pinata" && config2.PINATA_GATEWAY_URL) {
           try {
-            const response = await axios2.get(`${config3.PINATA_GATEWAY_URL}/ipfs/${cleanHash}`, {
+            const response = await axios2.get(`${config2.PINATA_GATEWAY_URL}/ipfs/${cleanHash}`, {
               timeout: 1e4
             });
             return typeof response.data === "string" ? response.data : JSON.stringify(response.data);
@@ -1227,7 +1227,7 @@ var connection, tipQueue, QueueService;
 var init_QueueService = __esm({
   "server/services/QueueService.ts"() {
     init_config();
-    connection = new IORedis(config3.REDIS_URL || "redis://localhost:6379", {
+    connection = new IORedis(config2.REDIS_URL || "redis://localhost:6379", {
       maxRetriesPerRequest: null
     });
     tipQueue = new Queue("tip-processing", { connection });
@@ -1614,8 +1614,8 @@ var init_BadgeEngine = __esm({
       CACHE_TTL = 5 * 60 * 1e3;
       // 5 minutes
       constructor() {
-        if (config3.HUGGINGFACE_API_KEY && config3.HUGGINGFACE_API_KEY !== "dummy_hf_key") {
-          this.hf = new HfInference2(config3.HUGGINGFACE_API_KEY);
+        if (config2.HUGGINGFACE_API_KEY && config2.HUGGINGFACE_API_KEY !== "dummy_hf_key") {
+          this.hf = new HfInference2(config2.HUGGINGFACE_API_KEY);
         }
       }
       /**
@@ -2395,7 +2395,7 @@ var init_TipService = __esm({
             ]);
             const txResponse = await this.blockchainService.sendMetaTransaction({
               from: tip.sender.walletAddress,
-              to: config3.TIP_CONTRACT_ADDRESS,
+              to: config2.TIP_CONTRACT_ADDRESS,
               data: txData,
               signature: "0x_user_signature_placeholder"
               // In real app, signature comes from frontend
@@ -2540,8 +2540,8 @@ var init_RewardService = __esm({
       rewardsContract = null;
       rewardsContractAddress;
       constructor() {
-        this.provider = new JsonRpcProvider3(config3.VERY_CHAIN_RPC_URL);
-        const rewardSignerKey = process.env.REWARD_SIGNER_PRIVATE_KEY || config3.SPONSOR_PRIVATE_KEY;
+        this.provider = new JsonRpcProvider3(config2.VERY_CHAIN_RPC_URL);
+        const rewardSignerKey = process.env.REWARD_SIGNER_PRIVATE_KEY || config2.SPONSOR_PRIVATE_KEY;
         if (!rewardSignerKey || rewardSignerKey === "0x0000000000000000000000000000000000000000000000000000000000000001") {
           throw new Error("REWARD_SIGNER_PRIVATE_KEY must be set in environment variables");
         }
@@ -3483,7 +3483,7 @@ var init_verychat = __esm({
         while (retries <= maxRetries) {
           try {
             const payload = req.body;
-            if (config3.NODE_ENV === "production" && !this.verifyWebhookSignature(req)) {
+            if (config2.NODE_ENV === "production" && !this.verifyWebhookSignature(req)) {
               res.status(401).json({ success: false, error: "Invalid signature" });
               return;
             }
@@ -3936,7 +3936,7 @@ ${usersText}`,
           where: { verychatId }
         });
         if (!user) {
-          if (config3.NODE_ENV === "development") {
+          if (config2.NODE_ENV === "development") {
             const mockWallet = ethers6.Wallet.createRandom();
             user = await this.db.user.create({
               data: {
@@ -3955,12 +3955,12 @@ ${usersText}`,
        * Verify webhook signature (production only)
        */
       verifyWebhookSignature(req) {
-        if (config3.NODE_ENV === "development") {
+        if (config2.NODE_ENV === "development") {
           return true;
         }
         const signature = req.headers["x-verychat-signature"];
         const timestamp = req.headers["x-verychat-timestamp"];
-        const secret = config3.WEBHOOK_SECRET;
+        const secret = config2.WEBHOOK_SECRET;
         if (!signature || !timestamp || !secret) {
           return false;
         }
@@ -4143,14 +4143,14 @@ var AITipSuggestionService = class {
     this.initializeOpenAI();
   }
   async initializeOpenAI() {
-    if (!config3.OPENAI_API_KEY || config3.OPENAI_API_KEY === "") {
+    if (!config2.OPENAI_API_KEY || config2.OPENAI_API_KEY === "") {
       console.log("\u26A0\uFE0F OpenAI API key not configured. AI Tip Suggestions will use fallback.");
       return;
     }
     try {
       const openaiModule = await import("openai");
       const OpenAI = openaiModule.default || openaiModule;
-      this.openai = new OpenAI({ apiKey: config3.OPENAI_API_KEY });
+      this.openai = new OpenAI({ apiKey: config2.OPENAI_API_KEY });
       this.openaiAvailable = true;
       console.log("\u2705 OpenAI initialized for AI Tip Suggestions");
     } catch (error) {
@@ -4169,7 +4169,7 @@ var AITipSuggestionService = class {
     if (cached) {
       return JSON.parse(cached);
     }
-    if (!this.openai && config3.OPENAI_API_KEY && config3.OPENAI_API_KEY !== "") {
+    if (!this.openai && config2.OPENAI_API_KEY && config2.OPENAI_API_KEY !== "") {
       await this.initializeOpenAI();
     }
     if (!this.openaiAvailable || !this.openai) {
@@ -4223,7 +4223,7 @@ Max tip: ${userPreferences.maxTip || "N/A"}
 Generate 1 optimal tip suggestion.
 `;
       const completion = await this.openai.chat.completions.create({
-        model: config3.OPENAI_MODEL || "gpt-4o-mini",
+        model: config2.OPENAI_MODEL || "gpt-4o-mini",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
@@ -4312,13 +4312,13 @@ var LeaderboardInsightsService = class {
     this.initializeOpenAI();
   }
   async initializeOpenAI() {
-    if (!config3.OPENAI_API_KEY || config3.OPENAI_API_KEY === "") {
+    if (!config2.OPENAI_API_KEY || config2.OPENAI_API_KEY === "") {
       console.log("OpenAI API key not configured for leaderboard insights. Using fallback.");
       return;
     }
     try {
       const OpenAI = (await import("openai")).default;
-      this.openai = new OpenAI({ apiKey: config3.OPENAI_API_KEY });
+      this.openai = new OpenAI({ apiKey: config2.OPENAI_API_KEY });
       this.openaiAvailable = true;
       console.log("OpenAI initialized for leaderboard insights");
     } catch (error) {
@@ -4330,7 +4330,7 @@ var LeaderboardInsightsService = class {
    * Generate personalized weekly leaderboard insights
    */
   async generatePersonalizedInsights(userData, communityStats) {
-    if (!this.openai && config3.OPENAI_API_KEY && config3.OPENAI_API_KEY !== "") {
+    if (!this.openai && config2.OPENAI_API_KEY && config2.OPENAI_API_KEY !== "") {
       await this.initializeOpenAI();
     }
     const cacheKey = `leaderboard:insights:${userData.rank}:${userData.totalTips}`;
@@ -4413,7 +4413,7 @@ ${communityStats.totalUsers} users, avg ${communityStats.avgTips.toFixed(1)} tip
 
 Generate 3-5 personalized insights (most important first). Return ONLY valid JSON array.`;
     const completion = await this.openai.chat.completions.create({
-      model: config3.OPENAI_MODEL || "gpt-4o-mini",
+      model: config2.OPENAI_MODEL || "gpt-4o-mini",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt }
@@ -4625,7 +4625,7 @@ var MODERATION_THRESHOLDS = {
 var ModerationService = class {
   hf;
   constructor() {
-    this.hf = new HfInference3(config3.HUGGINGFACE_API_KEY);
+    this.hf = new HfInference3(config2.HUGGINGFACE_API_KEY);
   }
   /**
    * Moderate a tip message using AI models
@@ -4789,7 +4789,7 @@ init_config();
 import { HfInference as HfInference4 } from "@huggingface/inference";
 import { PrismaClient as PrismaClient2 } from "@prisma/client";
 var prisma = new PrismaClient2();
-var hf = new HfInference4(config3.HUGGINGFACE_API_KEY);
+var hf = new HfInference4(config2.HUGGINGFACE_API_KEY);
 var ModerationPipeline = class {
   moderationService;
   constructor() {
@@ -5091,8 +5091,8 @@ var NFTService = class {
   nftContract = null;
   marketplaceContract = null;
   constructor() {
-    this.provider = new JsonRpcProvider2(config3.VERY_CHAIN_RPC_URL);
-    this.relayerWallet = new Wallet2(config3.SPONSOR_PRIVATE_KEY, this.provider);
+    this.provider = new JsonRpcProvider2(config2.VERY_CHAIN_RPC_URL);
+    this.relayerWallet = new Wallet2(config2.SPONSOR_PRIVATE_KEY, this.provider);
     this.ipfsService = new IpfsService();
     const nftAddress = process.env.NFT_CONTRACT_ADDRESS;
     const marketplaceAddress = process.env.MARKETPLACE_CONTRACT_ADDRESS;
@@ -5741,8 +5741,8 @@ function getSupabaseClient() {
   if (supabaseClient) {
     return supabaseClient;
   }
-  const url = process.env.SUPABASE_URL || config3.SUPABASE?.URL || "";
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || config3.SUPABASE?.SERVICE_ROLE_KEY || "";
+  const url = process.env.SUPABASE_URL || config2.SUPABASE?.URL || "";
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || config2.SUPABASE?.SERVICE_ROLE_KEY || "";
   if (!url || !serviceKey) {
     throw new Error(
       "Supabase configuration missing. Please set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables."
@@ -5753,7 +5753,7 @@ function getSupabaseClient() {
   } catch (e) {
     throw new Error(`Invalid SUPABASE_URL format: ${url}`);
   }
-  const anonKey = process.env.SUPABASE_ANON_KEY || config3.SUPABASE?.ANON_KEY || "";
+  const anonKey = process.env.SUPABASE_ANON_KEY || config2.SUPABASE?.ANON_KEY || "";
   if (serviceKey === anonKey && anonKey) {
     console.warn(
       "\u26A0\uFE0F  WARNING: SUPABASE_SERVICE_ROLE_KEY appears to be the same as ANON_KEY. Service role key should be different for security."
@@ -5775,7 +5775,11 @@ function getSupabaseClient() {
   });
   return supabaseClient;
 }
-var supabase = getSupabaseClient();
+var supabase = new Proxy({}, {
+  get(_target, prop) {
+    return getSupabaseClient()[prop];
+  }
+});
 
 // server/routes/indexerWebhook.ts
 var router2 = express2.Router();
@@ -5795,18 +5799,23 @@ router2.post("/indexer/webhook", async (req, res) => {
     if (tipError && tipError.message?.includes("function") && tipError.message?.includes("does not exist")) {
       const { data: existingTip } = await supabase2.from("tips").select("status, confirmations").eq("id", tipId).single();
       if (existingTip) {
-        const statusOrder = { pending: 0, submitted: 1, confirmed: 2, failed: -1 };
-        const currentStatus = statusOrder[existingTip.status] || 0;
-        const newStatus = statusOrder[status] || 0;
-        if (newStatus > currentStatus || status === "confirmed" && existingTip.status !== "confirmed") {
-          const { error: updateError } = await supabase2.from("tips").update({
-            relayer_tx_hash: txHash,
-            confirmations: Math.max(existingTip.confirmations || 0, confirmations || 1),
-            status: status || (confirmations >= 12 ? "confirmed" : "submitted")
-          }).eq("id", tipId);
-          if (updateError) {
-            console.error("Error updating tip:", updateError);
-            return res.status(500).json({ error: "Failed to update tip" });
+        const tipStatus = existingTip.status;
+        const tipConfirmations = existingTip.confirmations;
+        if (tipStatus !== void 0 && tipConfirmations !== void 0) {
+          const statusOrder = { pending: 0, submitted: 1, confirmed: 2, failed: -1 };
+          const currentStatus = statusOrder[tipStatus] || 0;
+          const newStatus = statusOrder[status] || 0;
+          if (newStatus > currentStatus || status === "confirmed" && tipStatus !== "confirmed") {
+            const updatePayload = {
+              relayer_tx_hash: txHash,
+              confirmations: Math.max(tipConfirmations || 0, confirmations || 1),
+              status: status || (confirmations >= 12 ? "confirmed" : "submitted")
+            };
+            const { error: updateError } = await supabase2.from("tips").update(updatePayload).eq("id", tipId);
+            if (updateError) {
+              console.error("Error updating tip:", updateError);
+              return res.status(500).json({ error: "Failed to update tip" });
+            }
           }
         }
       } else {
@@ -5833,6 +5842,7 @@ var indexerWebhook_default = router2;
 // server/routes/checkout.ts
 import express3 from "express";
 import Stripe from "stripe";
+init_config();
 var router3 = express3.Router();
 var stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2024-11-20.acacia"
@@ -5841,7 +5851,7 @@ var supabase3 = getSupabaseClient();
 var redis = null;
 try {
   const Redis = __require("ioredis");
-  const redisUrl = process.env.REDIS_URL || config.REDIS_URL || "redis://localhost:6379";
+  const redisUrl = process.env.REDIS_URL || config2.REDIS_URL || "redis://localhost:6379";
   redis = new Redis(redisUrl);
   console.log("\u2705 Redis connected for checkout queue");
 } catch (err) {
@@ -6443,10 +6453,10 @@ async function startServer() {
         };
       };
       let command = null;
-      if (config3.OPENAI_API_KEY && config3.OPENAI_API_KEY !== "") {
+      if (config2.OPENAI_API_KEY && config2.OPENAI_API_KEY !== "") {
         try {
           const OpenAI = (await import("openai")).default;
-          const openai = new OpenAI({ apiKey: config3.OPENAI_API_KEY });
+          const openai = new OpenAI({ apiKey: config2.OPENAI_API_KEY });
           const prompt = `Parse this voice command into JSON:
 "${transcript}"
 
@@ -6458,7 +6468,7 @@ Examples:
 
 Return ONLY valid JSON matching the schema.`;
           const completion = await openai.chat.completions.create({
-            model: config3.OPENAI_MODEL || "gpt-4o-mini",
+            model: config2.OPENAI_MODEL || "gpt-4o-mini",
             messages: [
               {
                 role: "system",
@@ -7202,10 +7212,10 @@ Return ONLY valid JSON matching the schema.`;
     }
     res.sendFile(path2.join(staticPath, "index.html"));
   });
-  const port = config3.PORT;
+  const port = config2.PORT;
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
-    console.log(`Environment: ${config3.NODE_ENV}`);
+    console.log(`Environment: ${config2.NODE_ENV}`);
   });
 }
 startServer().catch((error) => {
