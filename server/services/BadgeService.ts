@@ -25,11 +25,11 @@ export class BadgeService {
    * Returns newly awarded badges
    */
   async checkAndAwardBadges(userId: string): Promise<Badge[]> {
-    // Get all completed tips for the user
+    // Get all confirmed tips for the user
     const tips = await this.db.tip.findMany({
       where: {
         senderId: userId,
-        status: 'COMPLETED'
+        status: 'CONFIRMED'
       },
       orderBy: {
         createdAt: 'desc'
@@ -39,36 +39,46 @@ export class BadgeService {
     // Get currently awarded badges
     const existingBadges = await this.db.userBadge.findMany({
       where: {
-        userId,
-        revokedAt: null
+        userId
       },
       include: {
         badge: true
       }
     });
 
-    const existingBadgeIds = new Set(existingBadges.map(ub => ub.badge.badgeId));
+    const existingBadgeIds = new Set(existingBadges.map(ub => ub.badge.name));
 
     // Check what badges the user qualifies for
-    const qualifiedBadges = await this.badgeEngine.checkAllAchievements(userId, tips);
+    // Map tips to TipData format expected by BadgeEngine
+    const tipData = tips.map(tip => ({
+      id: tip.id,
+      senderId: tip.senderId,
+      recipientId: tip.recipientId,
+      amount: tip.amount,
+      token: tip.tokenAddress,
+      createdAt: tip.createdAt,
+      message: tip.messageHash
+    }));
+    const qualifiedBadges = await this.badgeEngine.checkAllAchievements(userId, tipData);
 
     // Filter to only new badges
-    const newBadges = qualifiedBadges.filter(b => !existingBadgeIds.has(b.badgeId));
+    const newBadges = qualifiedBadges.filter(b => !existingBadgeIds.has(b.name));
 
     // Award new badges
     const awardedBadges: Badge[] = [];
     for (const badge of newBadges) {
       try {
         // Ensure badge exists in database
-        await this.ensureBadgeExists(badge);
+        const badgeRecord = await this.ensureBadgeExists(badge);
 
         // Award badge to user
         await this.db.userBadge.create({
           data: {
             userId,
-            badgeId: badge.badgeId,
-            metadata: {
+            badgeId: badgeRecord.id,
+            context: {
               criteria: badge.criteria,
+              badgeId: badge.badgeId,
               awardedAt: new Date().toISOString()
             }
           }
@@ -88,25 +98,30 @@ export class BadgeService {
 
   /**
    * Ensure a badge definition exists in the database
+   * Returns the badge record
    */
-  private async ensureBadgeExists(badge: Badge): Promise<void> {
+  private async ensureBadgeExists(badge: Badge) {
     const existing = await this.db.badge.findUnique({
-      where: { badgeId: badge.badgeId }
+      where: { name: badge.name }
     });
 
     if (!existing) {
-      await this.db.badge.create({
+      return await this.db.badge.create({
         data: {
-          badgeId: badge.badgeId,
           name: badge.name,
-          emoji: badge.emoji,
           description: badge.description,
-          rarity: badge.rarity,
-          criteria: badge.criteria as any,
-          isActive: badge.isActive ?? true
+          imageUrl: `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg"><text>${badge.emoji}</text></svg>`)}`,
+          requirements: {
+            badgeId: badge.badgeId,
+            emoji: badge.emoji,
+            rarity: badge.rarity,
+            criteria: badge.criteria,
+            isActive: badge.isActive ?? true
+          } as any
         }
       });
     }
+    return existing;
   }
 
   /**
@@ -115,35 +130,38 @@ export class BadgeService {
   async getUserBadges(userId: string): Promise<UserBadgeWithDetails[]> {
     const userBadges = await this.db.userBadge.findMany({
       where: {
-        userId,
-        revokedAt: null
+        userId
       },
       include: {
         badge: true
       },
       orderBy: {
-        awardedAt: 'desc'
+        earnedAt: 'desc'
       }
     });
 
-    return userBadges.map(ub => ({
-      id: ub.id,
-      badgeId: ub.badge.badgeId,
-      name: ub.badge.name,
-      emoji: ub.badge.emoji,
-      rarity: ub.badge.rarity,
-      description: ub.badge.description,
-      awardedAt: ub.awardedAt,
-      metadata: ub.metadata as any
-    }));
+    return userBadges.map(ub => {
+      const requirements = (ub.badge.requirements as any) || {};
+      const context = (ub.context as any) || {};
+      return {
+        id: ub.id,
+        badgeId: requirements.badgeId || ub.badge.name,
+        name: ub.badge.name,
+        emoji: requirements.emoji || '🏆',
+        rarity: requirements.rarity || 'bronze',
+        description: ub.badge.description,
+        awardedAt: ub.earnedAt,
+        metadata: context
+      };
+    });
   }
 
   /**
-   * Get badge details by badgeId
+   * Get badge details by badgeId (name)
    */
   async getBadge(badgeId: string) {
     return await this.db.badge.findUnique({
-      where: { badgeId }
+      where: { name: badgeId }
     });
   }
 
@@ -151,29 +169,54 @@ export class BadgeService {
    * Get all available badges (definitions)
    */
   async getAllBadges() {
-    return await this.db.badge.findMany({
-      where: {
-        isActive: true
-      },
+    const badges = await this.db.badge.findMany({
       orderBy: {
-        rarity: 'asc'
+        createdAt: 'asc'
       }
     });
+    
+    // Filter and sort by rarity from requirements
+    return badges
+      .map(badge => {
+        const requirements = (badge.requirements as any) || {};
+        return {
+          ...badge,
+          rarity: requirements.rarity || 'bronze',
+          emoji: requirements.emoji || '🏆',
+          isActive: requirements.isActive !== false
+        };
+      })
+      .filter(b => b.isActive)
+      .sort((a, b) => {
+        const rarityOrder: Record<string, number> = {
+          bronze: 1,
+          silver: 2,
+          gold: 3,
+          platinum: 4,
+          diamond: 5
+        };
+        return (rarityOrder[a.rarity] || 0) - (rarityOrder[b.rarity] || 0);
+      });
   }
 
   /**
-   * Revoke a badge from a user
+   * Revoke a badge from a user (delete the UserBadge record)
    */
   async revokeBadge(userId: string, badgeId: string): Promise<boolean> {
     try {
-      await this.db.userBadge.updateMany({
+      // Find the badge by name
+      const badge = await this.db.badge.findUnique({
+        where: { name: badgeId }
+      });
+      
+      if (!badge) {
+        return false;
+      }
+
+      await this.db.userBadge.deleteMany({
         where: {
           userId,
-          badgeId,
-          revokedAt: null
-        },
-        data: {
-          revokedAt: new Date()
+          badgeId: badge.id
         }
       });
       return true;

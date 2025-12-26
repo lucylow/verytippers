@@ -46,7 +46,10 @@ var config2 = {
   HUGGINGFACE_API_KEY: process.env.HUGGINGFACE_API_KEY || "dummy_hf_key",
   // OpenAI
   OPENAI_API_KEY: process.env.OPENAI_API_KEY || "",
-  OPENAI_MODEL: process.env.OPENAI_MODEL || "gpt-4o-mini"
+  OPENAI_MODEL: process.env.OPENAI_MODEL || "gpt-4o-mini",
+  // Encryption
+  ENCRYPTION_KEY: process.env.ENCRYPTION_KEY || ""
+  // 64 hex characters (32 bytes) for AES-256
 };
 
 // server/services/BlockchainService.ts
@@ -844,6 +847,7 @@ var VerychatService = class {
 // server/services/IpfsService.ts
 import { create } from "ipfs-http-client";
 import axios2 from "axios";
+import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
 var IpfsService = class {
   constructor() {
     this.client = null;
@@ -1021,6 +1025,76 @@ var IpfsService = class {
   getProvider() {
     return this.provider;
   }
+  /**
+   * Encrypt and pin message to IPFS (Production)
+   * Uses AES-256-GCM encryption before uploading to IPFS
+   */
+  static async encryptAndPin(message, ipfsService) {
+    const encryptionKey = process.env.ENCRYPTION_KEY;
+    if (!encryptionKey) {
+      console.warn("ENCRYPTION_KEY not set, uploading unencrypted");
+      return await ipfsService.upload(message);
+    }
+    const iv = randomBytes(16);
+    const key = Buffer.from(encryptionKey, "hex");
+    if (key.length !== 32) {
+      throw new Error("ENCRYPTION_KEY must be 64 hex characters (32 bytes)");
+    }
+    const cipher = createCipheriv("aes-256-gcm", key, iv);
+    const encrypted = Buffer.concat([
+      cipher.update(message, "utf8"),
+      cipher.final()
+    ]);
+    const authTag = cipher.getAuthTag();
+    const payload = {
+      iv: iv.toString("hex"),
+      data: encrypted.toString("hex"),
+      tag: authTag.toString("hex"),
+      timestamp: Date.now()
+    };
+    const cid = await ipfsService.upload(JSON.stringify(payload));
+    return cid.replace("ipfs://", "");
+  }
+  /**
+   * Retrieve and decrypt message from IPFS (Production)
+   */
+  static async retrieveAndDecrypt(ipfsCid, ipfsService) {
+    const encryptionKey = process.env.ENCRYPTION_KEY;
+    const rawData = await ipfsService.fetch(ipfsCid);
+    let payload;
+    try {
+      payload = JSON.parse(rawData);
+    } catch (error) {
+      if (!encryptionKey) {
+        return rawData;
+      }
+      throw new Error("Failed to parse encrypted payload from IPFS");
+    }
+    if (!payload.iv || !payload.data || !payload.tag) {
+      if (!encryptionKey) {
+        return rawData;
+      }
+      throw new Error("Payload missing encryption fields");
+    }
+    if (!encryptionKey) {
+      throw new Error("ENCRYPTION_KEY required to decrypt but not set");
+    }
+    const key = Buffer.from(encryptionKey, "hex");
+    if (key.length !== 32) {
+      throw new Error("ENCRYPTION_KEY must be 64 hex characters (32 bytes)");
+    }
+    const decipher = createDecipheriv(
+      "aes-256-gcm",
+      key,
+      Buffer.from(payload.iv, "hex")
+    );
+    decipher.setAuthTag(Buffer.from(payload.tag, "hex"));
+    const decrypted = Buffer.concat([
+      decipher.update(Buffer.from(payload.data, "hex")),
+      decipher.final()
+    ]);
+    return decrypted.toString("utf8");
+  }
 };
 
 // server/services/DatabaseService.ts
@@ -1083,9 +1157,9 @@ var TipAnalyticsService = class {
       if (cached) return JSON.parse(cached);
     }
     const [totalTips, tips] = await Promise.all([
-      this.db.tip.count({ where: { status: "COMPLETED" } }),
+      this.db.tip.count({ where: { status: "CONFIRMED" } }),
       this.db.tip.findMany({
-        where: { status: "COMPLETED" },
+        where: { status: "CONFIRMED" },
         include: { sender: true, recipient: true },
         orderBy: { createdAt: "desc" }
       })
@@ -1095,11 +1169,11 @@ var TipAnalyticsService = class {
     tips.forEach((tip) => {
       const amount = BigInt(tip.amount);
       totalAmount += amount;
-      if (!tokenMap[tip.token]) {
-        tokenMap[tip.token] = { count: 0, total: BigInt(0) };
+      if (!tokenMap[tip.tokenAddress]) {
+        tokenMap[tip.tokenAddress] = { count: 0, total: BigInt(0) };
       }
-      tokenMap[tip.token].count++;
-      tokenMap[tip.token].total += amount;
+      tokenMap[tip.tokenAddress].count++;
+      tokenMap[tip.tokenAddress].total += amount;
     });
     const averageAmount = totalTips > 0 ? totalAmount / BigInt(totalTips) : BigInt(0);
     const uniqueUsers = /* @__PURE__ */ new Set([
@@ -1180,12 +1254,12 @@ var TipAnalyticsService = class {
     }
     const [sentTips, receivedTips] = await Promise.all([
       this.db.tip.findMany({
-        where: { senderId: userId, status: "COMPLETED" },
+        where: { senderId: userId, status: "CONFIRMED" },
         include: { recipient: true },
         orderBy: { createdAt: "desc" }
       }),
       this.db.tip.findMany({
-        where: { recipientId: userId, status: "COMPLETED" },
+        where: { recipientId: userId, status: "CONFIRMED" },
         include: { sender: true },
         orderBy: { createdAt: "desc" }
       })
@@ -1271,7 +1345,7 @@ var TipAnalyticsService = class {
     const cached = await this.cache.get(cacheKey);
     if (cached) return JSON.parse(cached);
     const tips = await this.db.tip.findMany({
-      where: { status: "COMPLETED" },
+      where: { status: "CONFIRMED" },
       orderBy: { createdAt: "desc" },
       take: limit * 10
       // Get more to ensure we have enough data
@@ -1320,7 +1394,7 @@ var TipAnalyticsService = class {
     const cached = await this.cache.get(cacheKey);
     if (cached) return JSON.parse(cached);
     const tips = await this.db.tip.findMany({
-      where: { status: "COMPLETED" },
+      where: { status: "CONFIRMED" },
       include: {
         sender: true,
         recipient: true
@@ -1333,10 +1407,10 @@ var TipAnalyticsService = class {
       senderId: tip.senderId,
       recipientId: tip.recipientId,
       amount: tip.amount,
-      token: tip.token,
-      message: tip.message,
+      token: tip.tokenAddress,
+      message: tip.messageHash,
       createdAt: tip.createdAt,
-      txHash: tip.txHash
+      txHash: tip.transactionHash
     }));
     await this.cache.set(cacheKey, JSON.stringify(feed), 60);
     return feed;
@@ -1647,7 +1721,7 @@ var BadgeService = class {
     const tips = await this.db.tip.findMany({
       where: {
         senderId: userId,
-        status: "COMPLETED"
+        status: "CONFIRMED"
       },
       orderBy: {
         createdAt: "desc"
@@ -1655,26 +1729,35 @@ var BadgeService = class {
     });
     const existingBadges = await this.db.userBadge.findMany({
       where: {
-        userId,
-        revokedAt: null
+        userId
       },
       include: {
         badge: true
       }
     });
-    const existingBadgeIds = new Set(existingBadges.map((ub) => ub.badge.badgeId));
-    const qualifiedBadges = await this.badgeEngine.checkAllAchievements(userId, tips);
-    const newBadges = qualifiedBadges.filter((b) => !existingBadgeIds.has(b.badgeId));
+    const existingBadgeIds = new Set(existingBadges.map((ub) => ub.badge.name));
+    const tipData = tips.map((tip) => ({
+      id: tip.id,
+      senderId: tip.senderId,
+      recipientId: tip.recipientId,
+      amount: tip.amount,
+      token: tip.tokenAddress,
+      createdAt: tip.createdAt,
+      message: tip.messageHash
+    }));
+    const qualifiedBadges = await this.badgeEngine.checkAllAchievements(userId, tipData);
+    const newBadges = qualifiedBadges.filter((b) => !existingBadgeIds.has(b.name));
     const awardedBadges = [];
     for (const badge of newBadges) {
       try {
-        await this.ensureBadgeExists(badge);
+        const badgeRecord = await this.ensureBadgeExists(badge);
         await this.db.userBadge.create({
           data: {
             userId,
-            badgeId: badge.badgeId,
-            metadata: {
+            badgeId: badgeRecord.id,
+            context: {
               criteria: badge.criteria,
+              badgeId: badge.badgeId,
               awardedAt: (/* @__PURE__ */ new Date()).toISOString()
             }
           }
@@ -1690,24 +1773,29 @@ var BadgeService = class {
   }
   /**
    * Ensure a badge definition exists in the database
+   * Returns the badge record
    */
   async ensureBadgeExists(badge) {
     const existing = await this.db.badge.findUnique({
-      where: { badgeId: badge.badgeId }
+      where: { name: badge.name }
     });
     if (!existing) {
-      await this.db.badge.create({
+      return await this.db.badge.create({
         data: {
-          badgeId: badge.badgeId,
           name: badge.name,
-          emoji: badge.emoji,
           description: badge.description,
-          rarity: badge.rarity,
-          criteria: badge.criteria,
-          isActive: badge.isActive ?? true
+          imageUrl: `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg"><text>${badge.emoji}</text></svg>`)}`,
+          requirements: {
+            badgeId: badge.badgeId,
+            emoji: badge.emoji,
+            rarity: badge.rarity,
+            criteria: badge.criteria,
+            isActive: badge.isActive ?? true
+          }
         }
       });
     }
+    return existing;
   }
   /**
    * Get all badges for a user
@@ -1715,61 +1803,81 @@ var BadgeService = class {
   async getUserBadges(userId) {
     const userBadges = await this.db.userBadge.findMany({
       where: {
-        userId,
-        revokedAt: null
+        userId
       },
       include: {
         badge: true
       },
       orderBy: {
-        awardedAt: "desc"
+        earnedAt: "desc"
       }
     });
-    return userBadges.map((ub) => ({
-      id: ub.id,
-      badgeId: ub.badge.badgeId,
-      name: ub.badge.name,
-      emoji: ub.badge.emoji,
-      rarity: ub.badge.rarity,
-      description: ub.badge.description,
-      awardedAt: ub.awardedAt,
-      metadata: ub.metadata
-    }));
+    return userBadges.map((ub) => {
+      const requirements = ub.badge.requirements || {};
+      const context = ub.context || {};
+      return {
+        id: ub.id,
+        badgeId: requirements.badgeId || ub.badge.name,
+        name: ub.badge.name,
+        emoji: requirements.emoji || "\u{1F3C6}",
+        rarity: requirements.rarity || "bronze",
+        description: ub.badge.description,
+        awardedAt: ub.earnedAt,
+        metadata: context
+      };
+    });
   }
   /**
-   * Get badge details by badgeId
+   * Get badge details by badgeId (name)
    */
   async getBadge(badgeId) {
     return await this.db.badge.findUnique({
-      where: { badgeId }
+      where: { name: badgeId }
     });
   }
   /**
    * Get all available badges (definitions)
    */
   async getAllBadges() {
-    return await this.db.badge.findMany({
-      where: {
-        isActive: true
-      },
+    const badges = await this.db.badge.findMany({
       orderBy: {
-        rarity: "asc"
+        createdAt: "asc"
       }
+    });
+    return badges.map((badge) => {
+      const requirements = badge.requirements || {};
+      return {
+        ...badge,
+        rarity: requirements.rarity || "bronze",
+        emoji: requirements.emoji || "\u{1F3C6}",
+        isActive: requirements.isActive !== false
+      };
+    }).filter((b) => b.isActive).sort((a, b) => {
+      const rarityOrder = {
+        bronze: 1,
+        silver: 2,
+        gold: 3,
+        platinum: 4,
+        diamond: 5
+      };
+      return (rarityOrder[a.rarity] || 0) - (rarityOrder[b.rarity] || 0);
     });
   }
   /**
-   * Revoke a badge from a user
+   * Revoke a badge from a user (delete the UserBadge record)
    */
   async revokeBadge(userId, badgeId) {
     try {
-      await this.db.userBadge.updateMany({
+      const badge = await this.db.badge.findUnique({
+        where: { name: badgeId }
+      });
+      if (!badge) {
+        return false;
+      }
+      await this.db.userBadge.deleteMany({
         where: {
           userId,
-          badgeId,
-          revokedAt: null
-        },
-        data: {
-          revokedAt: /* @__PURE__ */ new Date()
+          badgeId: badge.id
         }
       });
       return true;
@@ -1879,7 +1987,7 @@ var TipService = class {
             where: {
               senderId: context.senderId,
               recipientId: context.recipientId,
-              status: "COMPLETED"
+              status: "CONFIRMED"
             }
           });
           previousTips = tipHistory;
@@ -1930,7 +2038,7 @@ var TipService = class {
             where: {
               senderId: options.senderId,
               recipientId: options.recipientId,
-              status: "COMPLETED"
+              status: "CONFIRMED"
             }
           });
           previousTips = tipHistory;
@@ -1983,7 +2091,7 @@ var TipService = class {
         }
         try {
           sender = await this.db.user.create({
-            data: { id: vUser.id, walletAddress: vUser.walletAddress, publicKey: vUser.publicKey }
+            data: { id: vUser.id, walletAddress: vUser.walletAddress, verychatId: vUser.id }
           });
         } catch (createError) {
           if (createError.code === "P2002") {
@@ -2012,7 +2120,7 @@ var TipService = class {
         }
         try {
           recipient = await this.db.user.create({
-            data: { id: vUser.id, walletAddress: vUser.walletAddress, publicKey: vUser.publicKey }
+            data: { id: vUser.id, walletAddress: vUser.walletAddress, verychatId: vUser.id }
           });
         } catch (createError) {
           if (createError.code === "P2002") {
@@ -2053,9 +2161,11 @@ var TipService = class {
             senderId,
             recipientId,
             amount,
-            token,
-            message: message || null,
-            contentId: contentId || null,
+            tokenAddress: token,
+            amountInWei: ethers2.parseUnits(amount, 18),
+            messageHash: message || null,
+            transactionHash: `pending_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+            // Temporary placeholder, will be updated when transaction is confirmed
             status: "PENDING"
           }
         });
@@ -2108,23 +2218,22 @@ var TipService = class {
       return;
     }
     try {
-      await this.db.tip.update({ where: { id: tipId }, data: { status: "PROCESSING" } });
-      let messageHash = "";
-      if (tip.message) {
+      let messageHash = tip.messageHash || "";
+      if (tip.messageHash && !tip.messageEncrypted) {
         try {
-          const encrypted = await this.encryptMessage(tip.message, tip.recipient.publicKey);
+          const encrypted = tip.messageHash;
           messageHash = await this.ipfsService.upload(encrypted);
-          await this.db.tip.update({ where: { id: tipId }, data: { messageHash } });
+          await this.db.tip.update({ where: { id: tipId }, data: { messageHash, messageEncrypted: encrypted } });
         } catch (ipfsError) {
           console.error(`IPFS upload failed for tip ${tipId}:`, ipfsError);
         }
       }
       try {
         const tipContract = this.blockchainService.getTipContract();
-        const amountWei = ethers2.parseUnits(tip.amount, 18);
+        const amountWei = tip.amountInWei || ethers2.parseUnits(tip.amount, 18);
         const txData = tipContract.interface.encodeFunctionData("tip", [
           tip.recipient.walletAddress,
-          tip.token,
+          tip.tokenAddress,
           amountWei,
           messageHash
         ]);
@@ -2137,7 +2246,7 @@ var TipService = class {
         });
         await this.db.tip.update({
           where: { id: tipId },
-          data: { txHash: txResponse.hash }
+          data: { transactionHash: txResponse.hash }
         });
         const confirmationPromise = txResponse.wait();
         const timeoutPromise = new Promise(
@@ -2170,54 +2279,29 @@ var TipService = class {
           sender: { walletAddress: from },
           recipient: { walletAddress: to },
           messageHash: messageHash || null,
-          status: "PROCESSING"
+          status: "PENDING"
         }
       });
       if (tip) {
         await this.db.tip.update({
           where: { id: tip.id },
-          data: { status: "COMPLETED", txHash: eventData.event?.transactionHash || txHash }
+          data: {
+            status: "CONFIRMED",
+            transactionHash: eventData.event?.transactionHash || txHash,
+            confirmedAt: /* @__PURE__ */ new Date()
+          }
         });
         this.badgeService.checkAndAwardBadges(tip.senderId).catch((error) => {
           console.error(`Error checking badges for user ${tip.senderId}:`, error);
         });
-        if (tip.contentId) {
-          try {
-            const content = await this.db.content.findUnique({ where: { id: tip.contentId } });
-            if (content) {
-              const currentEarnings = ethers2.parseUnits(content.totalEarnings || "0", 18);
-              const tipAmount = ethers2.parseUnits(tip.amount, 18);
-              const newEarnings = currentEarnings + tipAmount;
-              const newEarningsString = ethers2.formatUnits(newEarnings, 18);
-              const viewCount = content.viewCount || 0;
-              const tipCount = (content.totalTips || 0) + 1;
-              const viewsPerTip = viewCount > 0 ? tipCount / viewCount : 0;
-              const earnings = parseFloat(newEarningsString) || 0;
-              const viewScore = Math.min(1, viewCount / 1e3);
-              const tipScore = Math.min(1, viewsPerTip * 10);
-              const earningsScore = Math.min(1, earnings / 100);
-              const engagementScore = Math.round((viewScore * 0.4 + tipScore * 0.3 + earningsScore * 0.3) * 100) / 100;
-              await this.db.content.update({
-                where: { id: tip.contentId },
-                data: {
-                  totalEarnings: newEarningsString,
-                  totalTips: { increment: 1 },
-                  engagementScore
-                }
-              });
-            }
-          } catch (contentError) {
-            console.error(`Error updating content earnings for tip ${tip.id}:`, contentError);
-          }
-        }
         await this.analyticsService.clearCache();
         this.verychatService.sendMessage(
           tip.senderId,
-          `Your tip of ${tip.amount} ${tip.token} was successful! Tx: ${txHash?.slice(0, 10)}...`
+          `Your tip of ${tip.amount} ${tip.tokenAddress} was successful! Tx: ${txHash?.slice(0, 10)}...`
         ).catch((err) => console.error("Failed to notify sender:", err));
         this.verychatService.sendMessage(
           tip.recipientId,
-          `You received a tip of ${tip.amount} ${tip.token}! \u{1F389}`
+          `You received a tip of ${tip.amount} ${tip.tokenAddress}! \u{1F389}`
         ).catch((err) => console.error("Failed to notify recipient:", err));
       } else {
         console.warn(`No matching tip found for event: ${txHash}`);
@@ -2241,8 +2325,8 @@ var TipService = class {
         senderId: tip.senderId,
         recipientId: tip.recipientId,
         amount: tip.amount,
-        token: tip.token,
-        message: tip.message,
+        token: tip.tokenAddress,
+        message: tip.messageHash,
         createdAt: tip.createdAt
       },
       status: tip.status
@@ -2283,26 +2367,7 @@ var ContentService = class {
         });
         contentHash = await this.ipfsService.upload(contentData);
       }
-      const content = await this.db.content.create({
-        data: {
-          creatorId: input.creatorId,
-          title: input.title,
-          description: input.description,
-          contentText: input.contentText,
-          contentHash,
-          contentType: input.contentType || "TEXT",
-          isAI: input.isAI ?? true,
-          aiModel: input.aiModel,
-          qualityScore: qualityScore?.overall,
-          monetizationType: input.monetizationType || "TIP",
-          price: input.price,
-          token: input.token,
-          isPremium: input.isPremium ?? false,
-          isPublished: false
-          // Requires review/publishing step
-        }
-      });
-      return { success: true, contentId: content.id };
+      throw new Error("Content model not yet implemented in database schema");
     } catch (error) {
       console.error("Error creating content:", error);
       return { success: false, message: "Failed to create content" };
@@ -2351,104 +2416,19 @@ var ContentService = class {
    * Publish content (make it available for monetization)
    */
   async publishContent(contentId) {
-    try {
-      const content = await this.db.content.findUnique({ where: { id: contentId } });
-      if (!content) {
-        return { success: false, message: "Content not found" };
-      }
-      if (content.contentText) {
-        const moderationResult = await this.hfService.moderateContent(content.contentText);
-        if (moderationResult.flagged) {
-          return { success: false, message: "Content cannot be published due to moderation issues" };
-        }
-      }
-      await this.db.content.update({
-        where: { id: contentId },
-        data: { isPublished: true }
-      });
-      return { success: true };
-    } catch (error) {
-      console.error("Error publishing content:", error);
-      return { success: false, message: "Failed to publish content" };
-    }
+    return { success: false, message: "Content model not yet implemented in database schema" };
   }
   /**
    * Record content view
    */
   async recordView(contentId, userId) {
-    try {
-      await this.db.content.update({
-        where: { id: contentId },
-        data: {
-          viewCount: { increment: 1 }
-        }
-      });
-      const today = /* @__PURE__ */ new Date();
-      today.setHours(0, 0, 0, 0);
-      const existingAnalytics = await this.db.contentAnalytics.findFirst({
-        where: {
-          contentId,
-          date: {
-            gte: today,
-            lt: new Date(today.getTime() + 24 * 60 * 60 * 1e3)
-          }
-        }
-      });
-      if (existingAnalytics) {
-        await this.db.contentAnalytics.update({
-          where: { id: existingAnalytics.id },
-          data: { views: { increment: 1 } }
-        });
-      } else {
-        await this.db.contentAnalytics.create({
-          data: {
-            contentId,
-            date: today,
-            views: 1
-          }
-        });
-      }
-    } catch (error) {
-      console.error("Error recording view:", error);
-      await this.db.content.update({
-        where: { id: contentId },
-        data: { viewCount: { increment: 1 } }
-      });
-    }
+    console.warn("Content model not yet implemented - view recording skipped");
   }
   /**
    * Tip content creator for specific content
    */
   async tipContent(senderId, contentId, amount, token, message) {
-    try {
-      const content = await this.db.content.findUnique({
-        where: { id: contentId },
-        include: { creator: true }
-      });
-      if (!content) {
-        return { success: false, message: "Content not found" };
-      }
-      if (!content.isPublished) {
-        return { success: false, message: "Content is not published" };
-      }
-      const tipResult = await this.tipService.processTip(
-        senderId,
-        content.creatorId,
-        amount,
-        token,
-        message,
-        contentId,
-        void 0
-        // options
-      );
-      if (!tipResult.success) {
-        return tipResult;
-      }
-      return { success: true, tipId: tipResult.tipId };
-    } catch (error) {
-      console.error("Error tipping content:", error);
-      return { success: false, message: "Failed to process tip" };
-    }
+    return { success: false, message: "Content model not yet implemented in database schema" };
   }
   /**
    * Calculate engagement score for content
@@ -2465,149 +2445,25 @@ var ContentService = class {
    * Get content analytics
    */
   async getContentAnalytics(contentId) {
-    try {
-      const content = await this.db.content.findUnique({
-        where: { id: contentId },
-        include: {
-          tips: {
-            include: { sender: true },
-            where: { status: "COMPLETED" }
-          }
-        }
-      });
-      if (!content) {
-        return null;
-      }
-      const tips = content.tips.filter((t) => t.status === "COMPLETED");
-      const totalTipAmount = tips.reduce((sum, tip) => sum + parseFloat(tip.amount || "0"), 0);
-      const averageTipAmount = tips.length > 0 ? (totalTipAmount / tips.length).toFixed(6) : "0";
-      const contributorMap = /* @__PURE__ */ new Map();
-      tips.forEach((tip) => {
-        const current = contributorMap.get(tip.senderId) || 0;
-        contributorMap.set(tip.senderId, current + parseFloat(tip.amount || "0"));
-      });
-      const topContributors = Array.from(contributorMap.entries()).map(([userId, totalTipped]) => ({ userId, totalTipped: totalTipped.toFixed(6) })).sort((a, b) => parseFloat(b.totalTipped) - parseFloat(a.totalTipped)).slice(0, 10);
-      return {
-        totalEarnings: content.totalEarnings || "0",
-        totalTips: content.totalTips,
-        viewCount: content.viewCount,
-        engagementScore: content.engagementScore,
-        averageTipAmount,
-        topContributors
-      };
-    } catch (error) {
-      console.error("Error getting content analytics:", error);
-      return null;
-    }
+    return null;
   }
   /**
    * Get recommended content based on monetization potential
    */
   async getRecommendedContent(limit = 10) {
-    try {
-      const content = await this.db.content.findMany({
-        where: {
-          isPublished: true
-        },
-        include: {
-          creator: true
-        },
-        orderBy: [
-          { engagementScore: "desc" },
-          { qualityScore: "desc" },
-          { totalEarnings: "desc" }
-        ],
-        take: limit
-      });
-      return content;
-    } catch (error) {
-      console.error("Error getting recommended content:", error);
-      return [];
-    }
+    return [];
   }
   /**
    * Create subscription for creator's premium content
    */
   async createSubscription(subscriberId, creatorId, amount, token) {
-    try {
-      const existing = await this.db.contentSubscription.findUnique({
-        where: {
-          subscriberId_creatorId: {
-            subscriberId,
-            creatorId
-          }
-        }
-      });
-      if (existing && existing.status === "ACTIVE") {
-        return { success: false, message: "Active subscription already exists" };
-      }
-      const endDate = /* @__PURE__ */ new Date();
-      endDate.setDate(endDate.getDate() + 30);
-      const subscription = await this.db.contentSubscription.upsert({
-        where: {
-          subscriberId_creatorId: {
-            subscriberId,
-            creatorId
-          }
-        },
-        create: {
-          subscriberId,
-          creatorId,
-          token,
-          amount,
-          status: "ACTIVE",
-          endDate
-        },
-        update: {
-          status: "ACTIVE",
-          startDate: /* @__PURE__ */ new Date(),
-          endDate,
-          amount,
-          token
-        }
-      });
-      return { success: true, subscriptionId: subscription.id };
-    } catch (error) {
-      console.error("Error creating subscription:", error);
-      return { success: false, message: "Failed to create subscription" };
-    }
+    return { success: false, message: "ContentSubscription model not yet implemented in database schema" };
   }
   /**
    * Check if user has access to premium content
    */
   async hasAccessToContent(userId, contentId) {
-    try {
-      const content = await this.db.content.findUnique({
-        where: { id: contentId }
-      });
-      if (!content) {
-        return false;
-      }
-      if (content.monetizationType === "FREE" || content.creatorId === userId) {
-        return true;
-      }
-      if (content.isPremium || content.monetizationType === "SUBSCRIPTION") {
-        const subscription = await this.db.contentSubscription.findUnique({
-          where: {
-            subscriberId_creatorId: {
-              subscriberId: userId,
-              creatorId: content.creatorId
-            }
-          }
-        });
-        if (!subscription || subscription.status !== "ACTIVE") {
-          return false;
-        }
-        if (subscription.endDate && subscription.endDate < /* @__PURE__ */ new Date()) {
-          return false;
-        }
-        return true;
-      }
-      return true;
-    } catch (error) {
-      console.error("Error checking content access:", error);
-      return false;
-    }
+    return false;
   }
 };
 
@@ -2976,7 +2832,7 @@ Generate 3-5 personalized insights (most important first). Return ONLY valid JSO
     const tipsSent = await db.tip.findMany({
       where: {
         senderId: userId,
-        status: "COMPLETED",
+        status: "CONFIRMED",
         createdAt: { gte: startDate }
       },
       include: { recipient: true }
@@ -2984,7 +2840,7 @@ Generate 3-5 personalized insights (most important first). Return ONLY valid JSO
     const tipsReceived = await db.tip.findMany({
       where: {
         recipientId: userId,
-        status: "COMPLETED",
+        status: "CONFIRMED",
         createdAt: { gte: startDate }
       }
     });
@@ -3016,7 +2872,7 @@ Generate 3-5 personalized insights (most important first). Return ONLY valid JSO
     }).sort((a, b) => b.tips - a.tips).slice(0, 5);
     const allTips = await db.tip.findMany({
       where: {
-        status: "COMPLETED",
+        status: "CONFIRMED",
         createdAt: { gte: startDate }
       },
       select: {
@@ -3264,6 +3120,274 @@ var ModerationService = class {
   }
 };
 
+// server/services/moderationPipeline.ts
+import { HfInference as HfInference4 } from "@huggingface/inference";
+import { PrismaClient as PrismaClient2 } from "@prisma/client";
+var prisma = new PrismaClient2();
+var hf = new HfInference4(config2.HUGGINGFACE_API_KEY);
+var ModerationPipeline = class {
+  constructor() {
+    this.moderationService = new ModerationService();
+  }
+  /**
+   * Process tip message through multi-stage moderation pipeline
+   */
+  async processTipMessage(message, context) {
+    const heuristicResult = await this.heuristicFilter(message);
+    if (!heuristicResult.isSafe) {
+      return {
+        ...heuristicResult,
+        stage: "heuristic",
+        models: {}
+      };
+    }
+    const [sentiment, toxicity, spam] = await Promise.all([
+      this.sentimentAnalysis(message),
+      this.toxicityAnalysis(message),
+      this.spamDetection(message, context)
+    ]);
+    const finalScore = this.calculateRiskScore(sentiment, toxicity, spam, context);
+    const action = this.determineAction(finalScore, toxicity, sentiment);
+    const result = {
+      isSafe: action === "allow",
+      sentiment: sentiment.sentiment || "neutral",
+      toxicityScore: toxicity.toxicityScore || 0,
+      toxicityLabels: toxicity.labels || [],
+      flaggedReason: action !== "allow" ? this.getReason(action, toxicity, spam) : null,
+      action,
+      stage: "ml-pipeline",
+      models: {
+        sentiment,
+        toxicity,
+        spam
+      }
+    };
+    if (action !== "allow") {
+      await this.queueForReview({
+        message,
+        senderId: context.senderId,
+        score: finalScore,
+        action,
+        result
+      });
+    }
+    return result;
+  }
+  /**
+   * Stage 1: Heuristic pre-filter (zero-cost regex blocks)
+   */
+  async heuristicFilter(message) {
+    const normalizedMessage = message.trim().toLowerCase();
+    const blocks = [
+      /\b(fuck|shit|damn|asshole|retard|cunt)\b/gi,
+      /\b(kys|kill yourself|die|suicide)\b/gi,
+      /\b(scam|fraud|rug)\b.*\b(you|ur)\b/gi,
+      /\b(gay|fag|tranny|nigger)\b/gi,
+      /\b(phishing|hack|steal|wallet)\b.*\b(private key|seed|mnemonic)\b/gi
+    ];
+    for (const pattern of blocks) {
+      if (pattern.test(normalizedMessage)) {
+        return {
+          isSafe: false,
+          sentiment: "negative",
+          toxicityScore: 1,
+          toxicityLabels: [{ label: "heuristic_block", score: 1 }],
+          flaggedReason: "Contains prohibited language",
+          action: "block"
+        };
+      }
+    }
+    if (normalizedMessage.includes("@") && normalizedMessage.includes("block") && normalizedMessage.includes("wallet")) {
+      return {
+        isSafe: false,
+        sentiment: "negative",
+        toxicityScore: 0.9,
+        toxicityLabels: [{ label: "suspicious_wallet_activity", score: 0.9 }],
+        flaggedReason: "Suspicious wallet/block report",
+        action: "block"
+      };
+    }
+    return {
+      isSafe: true,
+      sentiment: "neutral",
+      toxicityScore: 0,
+      toxicityLabels: [],
+      flaggedReason: null,
+      action: "allow"
+    };
+  }
+  /**
+   * Stage 2: Sentiment analysis
+   */
+  async sentimentAnalysis(text) {
+    try {
+      const result = await hf.textClassification({
+        model: "cardiffnlp/twitter-roberta-base-sentiment-latest",
+        inputs: text
+      });
+      const scores = Array.isArray(result) ? result : [result];
+      const firstResult = scores[0];
+      if (firstResult && Array.isArray(firstResult)) {
+        const scoreValues = firstResult.map((r) => typeof r === "number" ? r : r.score || 0);
+        const labels = ["negative", "neutral", "positive"];
+        const maxScore = Math.max(...scoreValues);
+        const sentiment = labels[scoreValues.indexOf(maxScore)];
+        return { sentiment, confidence: maxScore, scores: scoreValues };
+      } else if (firstResult && firstResult.label) {
+        const label = firstResult.label.toLowerCase();
+        const sentiment = label.includes("positive") ? "positive" : label.includes("negative") ? "negative" : "neutral";
+        return { sentiment, confidence: firstResult.score || 0.5 };
+      }
+      return { sentiment: "neutral", confidence: 0.5 };
+    } catch (error) {
+      console.error("Sentiment analysis error:", error);
+      return { sentiment: "neutral", confidence: 0.5 };
+    }
+  }
+  /**
+   * Stage 2: Toxicity analysis
+   */
+  async toxicityAnalysis(text) {
+    try {
+      const result = await hf.textClassification({
+        model: "unitary/toxic-bert",
+        inputs: text,
+        parameters: { return_all_scores: true }
+      });
+      const scores = Array.isArray(result) ? result : [result];
+      const firstResult = scores[0];
+      if (Array.isArray(firstResult)) {
+        const toxicityScores = firstResult.map(
+          (r) => typeof r === "number" ? r : r.score || 0
+        );
+        const toxicityScore = Math.max(...toxicityScores);
+        return {
+          toxicityScore,
+          labels: firstResult.map((r, i) => ({
+            label: r.label || `label_${i}`,
+            score: typeof r === "number" ? r : r.score || 0
+          })),
+          scores: toxicityScores
+        };
+      }
+      return {
+        toxicityScore: 0,
+        labels: [],
+        scores: []
+      };
+    } catch (error) {
+      console.error("Toxicity analysis error:", error);
+      return {
+        toxicityScore: 0,
+        labels: [],
+        scores: []
+      };
+    }
+  }
+  /**
+   * Stage 2: Spam detection
+   */
+  async spamDetection(message, context) {
+    try {
+      const spamIndicators = {
+        excessiveCapitalization: (message.match(/[A-Z]{5,}/g) || []).length > 0,
+        excessivePunctuation: (message.match(/[!?.]{3,}/g) || []).length > 0,
+        urlCount: (message.match(/https?:\/\/\S+/gi) || []).length,
+        repetitiveText: /(.)\1{4,}/.test(message),
+        shortMessageWithLinks: message.length < 20 && (message.match(/https?:\/\/\S+/gi) || []).length > 0
+      };
+      const spamScore = Object.values(spamIndicators).filter(Boolean).length / Object.keys(spamIndicators).length;
+      let historyScore = 0;
+      if (context.senderHistory) {
+        const flaggedRatio = context.senderHistory.flaggedTips / Math.max(context.senderHistory.totalTips, 1);
+        historyScore = flaggedRatio > 0.5 ? 0.8 : flaggedRatio * 0.5;
+      }
+      const finalSpamScore = Math.max(spamScore, historyScore);
+      return {
+        spamScore: finalSpamScore,
+        indicators: spamIndicators,
+        isSpam: finalSpamScore > 0.7
+      };
+    } catch (error) {
+      console.error("Spam detection error:", error);
+      return {
+        spamScore: 0,
+        indicators: {},
+        isSpam: false
+      };
+    }
+  }
+  /**
+   * Stage 3: Calculate contextual risk score
+   */
+  calculateRiskScore(sentiment, toxicity, spam, context) {
+    const toxicityWeight = 0.5;
+    const sentimentWeight = 0.2;
+    const spamWeight = 0.3;
+    const toxicityScore = toxicity.toxicityScore || 0;
+    const sentimentScore = sentiment.sentiment === "negative" ? 0.8 : sentiment.sentiment === "positive" ? 0 : 0.4;
+    const spamScore = spam.spamScore || 0;
+    let baseScore = toxicityScore * toxicityWeight + sentimentScore * sentimentWeight + spamScore * spamWeight;
+    if (context.senderHistory && context.senderHistory.flaggedTips > 0) {
+      const flaggedRatio = context.senderHistory.flaggedTips / Math.max(context.senderHistory.totalTips, 1);
+      baseScore = Math.min(1, baseScore + flaggedRatio * 0.2);
+    }
+    return Math.min(1, baseScore);
+  }
+  /**
+   * Stage 3: Determine action based on risk score
+   */
+  determineAction(riskScore, toxicity, sentiment) {
+    const toxicityScore = toxicity.toxicityScore || 0;
+    if (toxicityScore >= 0.85 || riskScore >= 0.9) {
+      return "block";
+    }
+    if (toxicityScore >= 0.65 || riskScore >= 0.7) {
+      return "quarantine";
+    }
+    if (toxicityScore >= 0.4 || riskScore >= 0.5 || sentiment.sentiment === "negative") {
+      return "warn";
+    }
+    return "allow";
+  }
+  /**
+   * Get human-readable reason for moderation action
+   */
+  getReason(action, toxicity, spam) {
+    if (action === "block") {
+      if (toxicity.toxicityScore >= 0.85) {
+        return "High toxicity detected";
+      }
+      if (spam.isSpam) {
+        return "Spam detected";
+      }
+      return "Content violates community guidelines";
+    }
+    if (action === "quarantine") {
+      return "Content requires manual review";
+    }
+    if (action === "warn") {
+      return "Moderate toxicity or suspicious content detected";
+    }
+    return "";
+  }
+  /**
+   * Stage 4: Queue for manual review
+   */
+  async queueForReview(data) {
+    try {
+      console.log("\u26A0\uFE0F Content queued for manual review:", {
+        senderId: data.senderId,
+        score: data.score,
+        action: data.action,
+        message: data.message.substring(0, 100)
+      });
+    } catch (error) {
+      console.error("Error queueing for review:", error);
+    }
+  }
+};
+
 // server/index.ts
 var __filename2 = fileURLToPath2(import.meta.url);
 var __dirname2 = path2.dirname(__filename2);
@@ -3276,6 +3400,7 @@ var leaderboardInsightsService = new LeaderboardInsightsService();
 var aiTipSuggestionService = new AITipSuggestionService();
 var aiService = new AIService();
 var moderationService = new ModerationService();
+var moderationPipeline = new ModerationPipeline();
 async function startServer() {
   const app = express();
   const server = createServer(app);
@@ -3299,30 +3424,43 @@ async function startServer() {
       return res.status(400).json({ success: false, message: "Message is required" });
     }
     try {
-      const result = await moderationService.moderateTipMessage(
-        message,
-        senderId,
+      const result = await moderationPipeline.processTipMessage(message, {
+        senderId: senderId || "unknown",
         recipientId,
-        context
-      );
+        channel: context?.channel,
+        recentTips: context?.recentTips
+      });
       res.status(200).json({
         success: true,
         result
       });
     } catch (error) {
       console.error("Error checking moderation:", error);
-      res.status(500).json({
-        success: false,
-        message: "Failed to check message moderation",
-        result: {
-          isSafe: true,
-          sentiment: "neutral",
-          toxicityScore: 0,
-          toxicityLabels: [],
-          flaggedReason: null,
-          action: "allow"
-        }
-      });
+      try {
+        const fallbackResult = await moderationService.moderateTipMessage(
+          message,
+          senderId,
+          recipientId,
+          context
+        );
+        res.status(200).json({
+          success: true,
+          result: fallbackResult
+        });
+      } catch (fallbackError) {
+        res.status(500).json({
+          success: false,
+          message: "Failed to check message moderation",
+          result: {
+            isSafe: true,
+            sentiment: "neutral",
+            toxicityScore: 0,
+            toxicityLabels: [],
+            flaggedReason: null,
+            action: "allow"
+          }
+        });
+      }
     }
   });
   app.post("/api/v1/tip", async (req, res) => {

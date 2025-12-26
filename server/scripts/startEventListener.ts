@@ -6,7 +6,9 @@ const status = eventListener.getStatus();
 
 if (status.listening) {
     console.log('✅ Event listener started successfully');
-    console.log(`Contract address: ${status.contractAddress}`);
+    console.log(`Tip contract: ${status.tipContract || 'Not configured'}`);
+    console.log(`NFT contract: ${status.nftContract || 'Not configured'}`);
+    console.log(`Marketplace contract: ${status.marketplaceContract || 'Not configured'}`);
 } else {
     console.warn('⚠️ Event listener not started (contract address not configured)');
 }

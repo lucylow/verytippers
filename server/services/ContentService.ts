@@ -79,26 +79,9 @@ export class ContentService {
             }
 
             // 4. Create content in database
-            const content = await this.db.content.create({
-                data: {
-                    creatorId: input.creatorId,
-                    title: input.title,
-                    description: input.description,
-                    contentText: input.contentText,
-                    contentHash: contentHash,
-                    contentType: input.contentType || 'TEXT',
-                    isAI: input.isAI ?? true,
-                    aiModel: input.aiModel,
-                    qualityScore: qualityScore?.overall,
-                    monetizationType: input.monetizationType || 'TIP',
-                    price: input.price,
-                    token: input.token,
-                    isPremium: input.isPremium ?? false,
-                    isPublished: false // Requires review/publishing step
-                }
-            });
-
-            return { success: true, contentId: content.id };
+            // Note: Content model not yet implemented in Prisma schema
+            // This is a placeholder implementation
+            throw new Error('Content model not yet implemented in database schema');
         } catch (error) {
             console.error('Error creating content:', error);
             return { success: false, message: 'Failed to create content' };
@@ -161,79 +144,16 @@ export class ContentService {
      * Publish content (make it available for monetization)
      */
     public async publishContent(contentId: string): Promise<{ success: boolean; message?: string }> {
-        try {
-            const content = await this.db.content.findUnique({ where: { id: contentId } });
-            if (!content) {
-                return { success: false, message: 'Content not found' };
-            }
-
-            // Final moderation check before publishing
-            if (content.contentText) {
-                const moderationResult = await this.hfService.moderateContent(content.contentText);
-                if (moderationResult.flagged) {
-                    return { success: false, message: 'Content cannot be published due to moderation issues' };
-                }
-            }
-
-            await this.db.content.update({
-                where: { id: contentId },
-                data: { isPublished: true }
-            });
-
-            return { success: true };
-        } catch (error) {
-            console.error('Error publishing content:', error);
-            return { success: false, message: 'Failed to publish content' };
-        }
+        // Note: Content model not yet implemented in Prisma schema
+        return { success: false, message: 'Content model not yet implemented in database schema' };
     }
 
     /**
      * Record content view
      */
     public async recordView(contentId: string, userId?: string): Promise<void> {
-        try {
-            await this.db.content.update({
-                where: { id: contentId },
-                data: {
-                    viewCount: { increment: 1 }
-                }
-            });
-
-            // Record analytics (create new entry for today)
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const existingAnalytics = await this.db.contentAnalytics.findFirst({
-                where: {
-                    contentId: contentId,
-                    date: {
-                        gte: today,
-                        lt: new Date(today.getTime() + 24 * 60 * 60 * 1000)
-                    }
-                }
-            });
-
-            if (existingAnalytics) {
-                await this.db.contentAnalytics.update({
-                    where: { id: existingAnalytics.id },
-                    data: { views: { increment: 1 } }
-                });
-            } else {
-                await this.db.contentAnalytics.create({
-                    data: {
-                        contentId: contentId,
-                        date: today,
-                        views: 1
-                    }
-                });
-            }
-        } catch (error) {
-            // Use fallback if upsert fails (might need different approach for date-based unique key)
-            console.error('Error recording view:', error);
-            await this.db.content.update({
-                where: { id: contentId },
-                data: { viewCount: { increment: 1 } }
-            });
-        }
+        // Note: Content model not yet implemented in Prisma schema
+        console.warn('Content model not yet implemented - view recording skipped');
     }
 
     /**
@@ -246,43 +166,8 @@ export class ContentService {
         token: string,
         message?: string
     ): Promise<{ success: boolean; tipId?: string; message?: string }> {
-        try {
-            const content = await this.db.content.findUnique({
-                where: { id: contentId },
-                include: { creator: true }
-            });
-
-            if (!content) {
-                return { success: false, message: 'Content not found' };
-            }
-
-            if (!content.isPublished) {
-                return { success: false, message: 'Content is not published' };
-            }
-
-            // Process tip through TipService (contentId will be linked automatically)
-            const tipResult = await this.tipService.processTip(
-                senderId,
-                content.creatorId,
-                amount,
-                token,
-                message,
-                contentId,
-                undefined // options
-            );
-
-            if (!tipResult.success) {
-                return tipResult;
-            }
-
-            // Note: Content earnings will be updated by TipService's handleBlockchainEvent
-            // when the tip transaction is confirmed on-chain
-
-            return { success: true, tipId: tipResult.tipId };
-        } catch (error) {
-            console.error('Error tipping content:', error);
-            return { success: false, message: 'Failed to process tip' };
-        }
+        // Note: Content model not yet implemented in Prisma schema
+        return { success: false, message: 'Content model not yet implemented in database schema' };
     }
 
     /**
@@ -305,77 +190,16 @@ export class ContentService {
      * Get content analytics
      */
     public async getContentAnalytics(contentId: string): Promise<ContentAnalyticsData | null> {
-        try {
-            const content = await this.db.content.findUnique({
-                where: { id: contentId },
-                include: {
-                    tips: {
-                        include: { sender: true },
-                        where: { status: 'COMPLETED' }
-                    }
-                }
-            });
-
-            if (!content) {
-                return null;
-            }
-
-            // Calculate average tip amount
-            const tips = content.tips.filter((t: { status: string }) => t.status === 'COMPLETED');
-            const totalTipAmount = tips.reduce((sum: number, tip: { amount?: string | null }) => sum + parseFloat(tip.amount || '0'), 0);
-            const averageTipAmount = tips.length > 0 ? (totalTipAmount / tips.length).toFixed(6) : '0';
-
-            // Get top contributors
-            const contributorMap = new Map<string, number>();
-            tips.forEach((tip: { senderId: string; amount?: string | null }) => {
-                const current = contributorMap.get(tip.senderId) || 0;
-                contributorMap.set(tip.senderId, current + parseFloat(tip.amount || '0'));
-            });
-
-            const topContributors = Array.from(contributorMap.entries())
-                .map(([userId, totalTipped]) => ({ userId, totalTipped: totalTipped.toFixed(6) }))
-                .sort((a, b) => parseFloat(b.totalTipped) - parseFloat(a.totalTipped))
-                .slice(0, 10);
-
-            return {
-                totalEarnings: content.totalEarnings || '0',
-                totalTips: content.totalTips,
-                viewCount: content.viewCount,
-                engagementScore: content.engagementScore,
-                averageTipAmount,
-                topContributors
-            };
-        } catch (error) {
-            console.error('Error getting content analytics:', error);
-            return null;
-        }
+        // Note: Content model not yet implemented in Prisma schema
+        return null;
     }
 
     /**
      * Get recommended content based on monetization potential
      */
     public async getRecommendedContent(limit: number = 10): Promise<any[]> {
-        try {
-            const content = await this.db.content.findMany({
-                where: {
-                    isPublished: true
-                },
-                include: {
-                    creator: true
-                },
-                orderBy: [
-                    { engagementScore: 'desc' },
-                    { qualityScore: 'desc' },
-                    { totalEarnings: 'desc' }
-                ],
-                take: limit
-            });
-
-            return content;
-        } catch (error) {
-            console.error('Error getting recommended content:', error);
-            return [];
-        }
+        // Note: Content model not yet implemented in Prisma schema
+        return [];
     }
 
     /**
@@ -387,103 +211,16 @@ export class ContentService {
         amount: string,
         token: string
     ): Promise<{ success: boolean; subscriptionId?: string; message?: string }> {
-        try {
-            // Check if subscription already exists
-            const existing = await this.db.contentSubscription.findUnique({
-                where: {
-                    subscriberId_creatorId: {
-                        subscriberId,
-                        creatorId
-                    }
-                }
-            });
-
-            if (existing && existing.status === 'ACTIVE') {
-                return { success: false, message: 'Active subscription already exists' };
-            }
-
-            // Calculate end date (30 days from now)
-            const endDate = new Date();
-            endDate.setDate(endDate.getDate() + 30);
-
-            const subscription = await this.db.contentSubscription.upsert({
-                where: {
-                    subscriberId_creatorId: {
-                        subscriberId,
-                        creatorId
-                    }
-                },
-                create: {
-                    subscriberId,
-                    creatorId,
-                    token,
-                    amount,
-                    status: 'ACTIVE',
-                    endDate
-                },
-                update: {
-                    status: 'ACTIVE',
-                    startDate: new Date(),
-                    endDate,
-                    amount,
-                    token
-                }
-            });
-
-            return { success: true, subscriptionId: subscription.id };
-        } catch (error) {
-            console.error('Error creating subscription:', error);
-            return { success: false, message: 'Failed to create subscription' };
-        }
+        // Note: ContentSubscription model not yet implemented in Prisma schema
+        return { success: false, message: 'ContentSubscription model not yet implemented in database schema' };
     }
 
     /**
      * Check if user has access to premium content
      */
     public async hasAccessToContent(userId: string, contentId: string): Promise<boolean> {
-        try {
-            const content = await this.db.content.findUnique({
-                where: { id: contentId }
-            });
-
-            if (!content) {
-                return false;
-            }
-
-            // Free content or own content
-            if (content.monetizationType === 'FREE' || content.creatorId === userId) {
-                return true;
-            }
-
-            // Premium content requires subscription
-            if (content.isPremium || content.monetizationType === 'SUBSCRIPTION') {
-                const subscription = await this.db.contentSubscription.findUnique({
-                    where: {
-                        subscriberId_creatorId: {
-                            subscriberId: userId,
-                            creatorId: content.creatorId
-                        }
-                    }
-                });
-
-                if (!subscription || subscription.status !== 'ACTIVE') {
-                    return false;
-                }
-
-                // Check if subscription hasn't expired
-                if (subscription.endDate && subscription.endDate < new Date()) {
-                    return false;
-                }
-
-                return true;
-            }
-
-            // Pay-per-view handled separately
-            return true;
-        } catch (error) {
-            console.error('Error checking content access:', error);
-            return false;
-        }
+        // Note: Content model not yet implemented in Prisma schema
+        return false;
     }
 }
 

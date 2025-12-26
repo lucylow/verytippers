@@ -16,6 +16,7 @@ import { BadgeDisplay } from '@/components/BadgeDisplay';
 import { PersonalizedInsights } from '@/components/PersonalizedInsights';
 import { useVeryTippers } from '@/hooks/useVeryTippers';
 import { cn } from '@/lib/utils';
+import AdSlot from '@/components/AdSlot';
 
 interface Message {
   id: string;
@@ -205,6 +206,9 @@ export default function Chat({ me, onRequestTip }: ChatProps) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Ad Slot */}
+      <AdSlot tags={['dev', 'web3']} className="mb-4" />
 
       {/* Input */}
       <Card className="bg-slate-900/30 backdrop-blur-xl border-slate-700/50">

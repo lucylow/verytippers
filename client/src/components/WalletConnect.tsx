@@ -7,7 +7,7 @@ import { ethers } from 'ethers';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { WalletIcon, CheckCircle } from 'lucide-react';
-import { useVeryTippers } from '@/hooks/useVeryTippers';
+import { useWallet } from '@/contexts/WalletContext';
 
 interface WalletConnectProps {
   className?: string;
@@ -21,7 +21,7 @@ export const WalletConnect: React.FC<WalletConnectProps> = ({ className }) => {
     disconnectWallet,
     switchToVeryChain,
     provider
-  } = useVeryTippers();
+  } = useWallet();
   
   const [isConnecting, setIsConnecting] = useState(false);
   const [walletType, setWalletType] = useState<'wepin' | 'metamask' | null>(null);

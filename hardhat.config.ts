@@ -13,20 +13,29 @@ const config: HardhatUserConfig = {
   },
   networks: {
     hardhat: {},
+    // VERY Chain Mainnet
+    // Official RPC: https://rpc.verylabs.io
+    // Chain ID: 4613
+    // Reference: https://wp.verylabs.io/verychain
+    verychain: {
+      url: process.env.VERY_CHAIN_RPC_URL || "https://rpc.verylabs.io",
+      chainId: 4613,
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      gasPrice: 20000000000,
+      timeout: 120000
+    },
+    // Legacy network configs (kept for backward compatibility)
     very: {
-      url: "https://rpc.verychain.org",
-      chainId: 8888,
+      url: "https://rpc.verylabs.io",
+      chainId: 4613,
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
       gasPrice: 20000000000
     },
+    // Testnet (if available)
     veryTestnet: {
-      url: "https://rpc.testnet.verychain.org",
-      chainId: 8889,
+      url: process.env.VERY_TESTNET_RPC_URL || "https://rpc.testnet.very.network",
+      chainId: parseInt(process.env.VERY_TESTNET_CHAIN_ID || "1337"),
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : []
-    },
-    verychain: {
-      url: process.env.VERY_CHAIN_RPC_URL || "http://localhost:8545",
-      accounts: process.env.SPONSOR_PRIVATE_KEY ? [process.env.SPONSOR_PRIVATE_KEY] : [],
     }
   },
   paths: {

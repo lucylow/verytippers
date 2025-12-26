@@ -4,8 +4,20 @@
  */
 
 export const VERY_TESTNET = {
-  chainId: 4613,
-  chainName: 'Very Chain Testnet',
+  chainId: 1337, // Testnet Chain ID (update with official testnet ID when available)
+  chainName: 'VERY Chain Testnet',
+  rpcUrls: ['https://rpc.testnet.very.network'],
+  blockExplorerUrls: ['https://explorer.testnet.very.network'],
+  nativeCurrency: {
+    name: 'VERY',
+    symbol: 'VERY',
+    decimals: 18
+  }
+};
+
+export const VERY_MAINNET = {
+  chainId: 4613, // Official VERY Chain Mainnet ID
+  chainName: 'VERY Chain',
   rpcUrls: ['https://rpc.verylabs.io'],
   blockExplorerUrls: ['https://explorer.very.network'],
   nativeCurrency: {
@@ -15,19 +27,7 @@ export const VERY_TESTNET = {
   }
 };
 
-export const VERY_MAINNET = {
-  chainId: 4613, // Update with actual mainnet ID
-  chainName: 'Very Chain',
-  rpcUrls: ['https://rpc.very.network'],
-  blockExplorerUrls: ['https://explorer.very.network'],
-  nativeCurrency: {
-    name: 'VERY',
-    symbol: 'VERY',
-    decimals: 18
-  }
-};
-
-// Use testnet by default for hackathon
+// Default to testnet - will be overridden by NetworkContext
 export const VERY_CHAIN = VERY_TESTNET;
 
 // Contract addresses (mock addresses for hackathon - replace with deployed addresses)

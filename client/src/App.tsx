@@ -6,11 +6,15 @@ import { toast } from "sonner";
 import NotFound from "@/pages/NotFound";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { NetworkProvider } from "./contexts/NetworkContext";
+import { WalletProvider } from "./contexts/WalletContext";
 import Home from "./pages/Home";
 import DAO from "./pages/DAO";
 import TipDemo from "./pages/TipDemo";
 import MockDemo from "./pages/MockDemo";
+import NFTMarketplace from "./pages/NFTMarketplace";
 import { VoiceTippingButton } from "./components/VoiceTippingButton";
+import { NetworkSelector } from "./components/NetworkSelector";
 
 // Import improved error handling utilities
 import { categorizeError, type CategorizedError } from "@/lib/errors/errorTypes";
@@ -30,7 +34,7 @@ export type { RetryConfig } from "@/lib/utils/retry";
  */
 function Router() {
   // Memoize valid routes to avoid recreation on each render
-  const validRoutes = useMemo(() => ["/", "/dao", "/demo", "/mock-demo", "/404"], []);
+  const validRoutes = useMemo(() => ["/", "/dao", "/demo", "/mock-demo", "/nft", "/404"], []);
 
   // Error handler with recovery
   const handleErrorWithRecovery = useCallback(
@@ -194,6 +198,9 @@ function Router() {
       <Route path="/mock-demo">
         <MockDemo />
       </Route>
+      <Route path="/nft">
+        <NFTMarketplace />
+      </Route>
       <Route path="/404">
         <NotFound />
       </Route>
@@ -209,11 +216,18 @@ function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="light">
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-          <VoiceTippingButton />
-        </TooltipProvider>
+        <NetworkProvider>
+          <WalletProvider>
+            <TooltipProvider>
+              <Toaster />
+              <div className="fixed top-4 right-4 z-50">
+                <NetworkSelector />
+              </div>
+              <Router />
+              <VoiceTippingButton />
+            </TooltipProvider>
+          </WalletProvider>
+        </NetworkProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

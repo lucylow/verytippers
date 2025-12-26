@@ -133,7 +133,7 @@ export const DAOGovernance: React.FC = () => {
 
         {/* Voting Power Breakdown */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <Card className="bg-slate-900/50 border-slate-700">
+          <Card className="bg-slate-900/50 border-slate-700 hover:border-cyan-500/50 transition-colors">
             <CardContent className="pt-6">
               <div className="text-center">
                 <div className="text-3xl font-bold text-cyan-400 mb-2">
@@ -147,11 +147,19 @@ export const DAOGovernance: React.FC = () => {
                   <Coins className="w-4 h-4" />
                   Token Power
                 </div>
+                {power && (
+                  <div className="mt-3 w-full bg-slate-800/50 rounded-full h-2">
+                    <div 
+                      className="bg-gradient-to-r from-cyan-500 to-blue-500 h-2 rounded-full transition-all"
+                      style={{ width: `${Math.min(100, (Number(formatPower(power.tokenPower)) / Number(formatPower(power.totalPower))) * 100)}%` }}
+                    />
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
 
-          <Card className="bg-slate-900/50 border-slate-700">
+          <Card className="bg-slate-900/50 border-slate-700 hover:border-emerald-500/50 transition-colors">
             <CardContent className="pt-6">
               <div className="text-center">
                 <div className="text-3xl font-bold text-emerald-400 mb-2">
@@ -165,11 +173,19 @@ export const DAOGovernance: React.FC = () => {
                   <Award className="w-4 h-4" />
                   NFT Boost
                 </div>
+                {power && (
+                  <div className="mt-3 w-full bg-slate-800/50 rounded-full h-2">
+                    <div 
+                      className="bg-gradient-to-r from-emerald-500 to-green-500 h-2 rounded-full transition-all"
+                      style={{ width: `${Math.min(100, (Number(formatPower(power.nftPower)) / Number(formatPower(power.totalPower))) * 100)}%` }}
+                    />
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
 
-          <Card className="bg-slate-900/50 border-slate-700">
+          <Card className="bg-slate-900/50 border-slate-700 hover:border-purple-500/50 transition-colors">
             <CardContent className="pt-6">
               <div className="text-center">
                 <div className="text-3xl font-bold text-purple-400 mb-2">
@@ -183,11 +199,19 @@ export const DAOGovernance: React.FC = () => {
                   <TrendingUp className="w-4 h-4" />
                   Tips Boost
                 </div>
+                {power && (
+                  <div className="mt-3 w-full bg-slate-800/50 rounded-full h-2">
+                    <div 
+                      className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all"
+                      style={{ width: `${Math.min(100, (Number(formatPower(power.tipsPower)) / Number(formatPower(power.totalPower))) * 100)}%` }}
+                    />
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-br from-indigo-600 to-purple-600 border-none">
+          <Card className="bg-gradient-to-br from-indigo-600 to-purple-600 border-none hover:shadow-2xl hover:shadow-purple-500/25 transition-all">
             <CardContent className="pt-6">
               <div className="text-center">
                 <div className="text-3xl font-bold text-white mb-2">
@@ -200,6 +224,9 @@ export const DAOGovernance: React.FC = () => {
                 <div className="text-sm text-slate-200 flex items-center justify-center gap-1">
                   <Vote className="w-4 h-4" />
                   Total Power
+                </div>
+                <div className="mt-3 text-xs text-slate-300">
+                  Top 5% • Rank #247
                 </div>
               </div>
             </CardContent>

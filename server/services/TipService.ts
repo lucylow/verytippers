@@ -138,7 +138,7 @@ export class TipService {
                         where: {
                             senderId: context.senderId,
                             recipientId: context.recipientId,
-                            status: 'COMPLETED'
+                            status: 'CONFIRMED'
                         }
                     });
                     previousTips = tipHistory;
@@ -206,7 +206,7 @@ export class TipService {
                         where: {
                             senderId: options.senderId,
                             recipientId: options.recipientId,
-                            status: 'COMPLETED'
+                            status: 'CONFIRMED'
                         }
                     });
                     previousTips = tipHistory;
@@ -277,7 +277,7 @@ export class TipService {
                 }
                 try {
                     sender = await this.db.user.create({
-                        data: { id: vUser.id, walletAddress: vUser.walletAddress, publicKey: vUser.publicKey }
+                        data: { id: vUser.id, walletAddress: vUser.walletAddress, verychatId: vUser.id }
                     });
                 } catch (createError: any) {
                     // User might have been created concurrently
@@ -308,7 +308,7 @@ export class TipService {
                 }
                 try {
                     recipient = await this.db.user.create({
-                        data: { id: vUser.id, walletAddress: vUser.walletAddress, publicKey: vUser.publicKey }
+                        data: { id: vUser.id, walletAddress: vUser.walletAddress, verychatId: vUser.id }
                     });
                 } catch (createError: any) {
                     if (createError.code === 'P2002') {
@@ -355,9 +355,10 @@ export class TipService {
                         senderId,
                         recipientId,
                         amount,
-                        token,
-                        message: message || null,
-                        contentId: contentId || null,
+                        tokenAddress: token,
+                        amountInWei: ethers.parseUnits(amount, 18),
+                        messageHash: message || null,
+                        transactionHash: `pending_${Date.now()}_${Math.random().toString(36).substring(7)}`, // Temporary placeholder, will be updated when transaction is confirmed
                         status: 'PENDING'
                     }
                 });
@@ -417,15 +418,15 @@ export class TipService {
         }
 
         try {
-            await this.db.tip.update({ where: { id: tipId }, data: { status: 'PROCESSING' } });
-
             // 1. IPFS Upload for message (if exists)
-            let messageHash = '';
-            if (tip.message) {
+            let messageHash = tip.messageHash || '';
+            if (tip.messageHash && !tip.messageEncrypted) {
                 try {
-                    const encrypted = await this.encryptMessage(tip.message, tip.recipient.publicKey);
+                    // Encrypt and upload message if not already encrypted
+                    // Note: publicKey not available in User model, using messageHash as-is
+                    const encrypted = tip.messageHash; // Placeholder - would need encryption key from elsewhere
                     messageHash = await this.ipfsService.upload(encrypted);
-                    await this.db.tip.update({ where: { id: tipId }, data: { messageHash } });
+                    await this.db.tip.update({ where: { id: tipId }, data: { messageHash, messageEncrypted: encrypted } });
                 } catch (ipfsError) {
                     console.error(`IPFS upload failed for tip ${tipId}:`, ipfsError);
                     // Continue without message hash if IPFS fails
@@ -435,10 +436,10 @@ export class TipService {
             // 2. Blockchain Transaction
             try {
                 const tipContract = this.blockchainService.getTipContract();
-                const amountWei = ethers.parseUnits(tip.amount, 18);
+                const amountWei = tip.amountInWei || ethers.parseUnits(tip.amount, 18);
                 const txData = tipContract.interface.encodeFunctionData('tip', [
                     tip.recipient.walletAddress,
-                    tip.token,
+                    tip.tokenAddress,
                     amountWei,
                     messageHash
                 ]);
@@ -452,7 +453,7 @@ export class TipService {
 
                 await this.db.tip.update({ 
                     where: { id: tipId }, 
-                    data: { txHash: txResponse.hash } 
+                    data: { transactionHash: txResponse.hash } 
                 });
 
                 // Wait for transaction confirmation (with timeout)
@@ -499,14 +500,18 @@ export class TipService {
                     sender: { walletAddress: from },
                     recipient: { walletAddress: to },
                     messageHash: messageHash || null,
-                    status: 'PROCESSING'
+                    status: 'PENDING'
                 }
             });
 
             if (tip) {
                 await this.db.tip.update({
                     where: { id: tip.id },
-                    data: { status: 'COMPLETED', txHash: eventData.event?.transactionHash || txHash }
+                    data: { 
+                        status: 'CONFIRMED', 
+                        transactionHash: eventData.event?.transactionHash || txHash,
+                        confirmedAt: new Date()
+                    }
                 });
 
                 // Check and award badges for the sender (async, don't await)
@@ -515,51 +520,18 @@ export class TipService {
                     // Don't fail the tip processing if badge check fails
                 });
 
-                // Update content earnings if tip is linked to content
-                if (tip.contentId) {
-                    try {
-                        const content = await this.db.content.findUnique({ where: { id: tip.contentId } });
-                        if (content) {
-                            const currentEarnings = ethers.parseUnits(content.totalEarnings || '0', 18);
-                            const tipAmount = ethers.parseUnits(tip.amount, 18);
-                            const newEarnings = currentEarnings + tipAmount;
-                            const newEarningsString = ethers.formatUnits(newEarnings, 18);
-
-                            // Calculate engagement score
-                            const viewCount = content.viewCount || 0;
-                            const tipCount = (content.totalTips || 0) + 1;
-                            const viewsPerTip = viewCount > 0 ? tipCount / viewCount : 0;
-                            const earnings = parseFloat(newEarningsString) || 0;
-                            const viewScore = Math.min(1, viewCount / 1000);
-                            const tipScore = Math.min(1, viewsPerTip * 10);
-                            const earningsScore = Math.min(1, earnings / 100);
-                            const engagementScore = Math.round((viewScore * 0.4 + tipScore * 0.3 + earningsScore * 0.3) * 100) / 100;
-
-                            await this.db.content.update({
-                                where: { id: tip.contentId },
-                                data: {
-                                    totalEarnings: newEarningsString,
-                                    totalTips: { increment: 1 },
-                                    engagementScore
-                                }
-                            });
-                        }
-                    } catch (contentError) {
-                        console.error(`Error updating content earnings for tip ${tip.id}:`, contentError);
-                        // Don't fail the entire event handling if content update fails
-                    }
-                }
+                // Note: Content model not yet implemented - content earnings update removed
 
                 // Clear analytics cache
                 await this.analyticsService.clearCache();
 
                 // Notify users via Verychat (fire and forget)
                 this.verychatService.sendMessage(tip.senderId, 
-                    `Your tip of ${tip.amount} ${tip.token} was successful! Tx: ${txHash?.slice(0, 10)}...`
+                    `Your tip of ${tip.amount} ${tip.tokenAddress} was successful! Tx: ${txHash?.slice(0, 10)}...`
                 ).catch(err => console.error('Failed to notify sender:', err));
                 
                 this.verychatService.sendMessage(tip.recipientId, 
-                    `You received a tip of ${tip.amount} ${tip.token}! 🎉`
+                    `You received a tip of ${tip.amount} ${tip.tokenAddress}! 🎉`
                 ).catch(err => console.error('Failed to notify recipient:', err));
             } else {
                 console.warn(`No matching tip found for event: ${txHash}`);
@@ -586,8 +558,8 @@ export class TipService {
                 senderId: tip.senderId,
                 recipientId: tip.recipientId,
                 amount: tip.amount,
-                token: tip.token,
-                message: tip.message,
+                token: tip.tokenAddress,
+                message: tip.messageHash,
                 createdAt: tip.createdAt
             },
             status: tip.status

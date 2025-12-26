@@ -3,17 +3,21 @@ import { config } from '../config';
 import axios from 'axios';
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
 
-export type IpfsProvider = 'infura' | 'pinata';
+export type IpfsProvider = 'mock' | 'infura' | 'pinata';
 
 export class IpfsService {
     private client: IPFSHTTPClient | null = null;
     private provider: IpfsProvider;
 
     constructor() {
-        // Determine provider: Pinata takes precedence if configured (free tier friendly)
-        if (config.PINATA_API_KEY && config.PINATA_SECRET_API_KEY) {
+        // Check IPFS_MODE environment variable first
+        const ipfsMode = (process.env.IPFS_MODE || 'mock').toLowerCase() as IpfsProvider;
+        
+        if (ipfsMode === 'mock') {
+            this.provider = 'mock';
+        } else if (ipfsMode === 'pinata' && config.PINATA_API_KEY && config.PINATA_SECRET_API_KEY) {
             this.provider = 'pinata';
-        } else if (config.IPFS_PROJECT_ID && config.IPFS_PROJECT_SECRET) {
+        } else if (ipfsMode === 'infura' && config.IPFS_PROJECT_ID && config.IPFS_PROJECT_SECRET) {
             this.provider = 'infura';
             const auth = 'Basic ' + Buffer.from(config.IPFS_PROJECT_ID + ':' + config.IPFS_PROJECT_SECRET).toString('base64');
             this.client = create({
@@ -25,14 +29,28 @@ export class IpfsService {
                 },
             });
         } else {
-            this.provider = 'pinata'; // Default to Pinata for demo/mock
+            // Fallback: try Pinata if configured, otherwise mock
+            if (config.PINATA_API_KEY && config.PINATA_SECRET_API_KEY) {
+                this.provider = 'pinata';
+            } else {
+                this.provider = 'mock';
+                console.warn('IPFS_MODE=mock: Using mock IPFS (no real pinning)');
+            }
         }
     }
 
     /**
-     * Upload content to IPFS using the configured provider (Pinata or Infura)
+     * Upload content to IPFS using the configured provider (mock, Pinata, or Infura)
      */
     async upload(content: string): Promise<string> {
+        if (this.provider === 'mock') {
+            // Generate deterministic mock CID based on content hash
+            const contentHash = require('crypto').createHash('sha256').update(content).digest('hex');
+            const mockCid = `Qm${contentHash.slice(0, 44)}`; // IPFS CID format
+            console.log(`[MOCK IPFS] Uploaded content, CID: ${mockCid}`);
+            return `ipfs://${mockCid}`;
+        }
+
         if (this.provider === 'pinata') {
             return this.uploadToPinata(content);
         }

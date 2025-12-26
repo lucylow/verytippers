@@ -1,11 +1,29 @@
 /**
- * VERY Chain Configuration (Testnet-Safe)
- * Primary path = real testnet interaction (RPC + contract)
- * Fallback path = mock relayer + simulated tx
+ * VERY Chain Configuration
+ * Official RPC: https://rpc.verylabs.io
+ * Chain ID: 4613
+ * Currency: VERY
+ * 
+ * Reference: https://wp.verylabs.io/verychain
  */
+export const VERY_CHAIN = {
+  chainId: 4613, // Official VERY Chain ID
+  chainName: "VERY Chain",
+  rpcUrls: ["https://rpc.verylabs.io"],
+  blockExplorerUrls: ["https://explorer.very.network"],
+  nativeCurrency: {
+    name: "VERY",
+    symbol: "VERY",
+    decimals: 18
+  }
+};
 
+/**
+ * VERY Chain Testnet (if available)
+ * Fallback configuration for development
+ */
 export const VERY_TESTNET = {
-  chainId: 1337, // replace if official VERY testnet exists
+  chainId: 1337, // Replace with official testnet ID when available
   chainName: "VERY Testnet",
   rpcUrls: ["https://rpc.testnet.very.network"],
   blockExplorerUrls: ["https://explorer.testnet.very.network"],

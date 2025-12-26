@@ -55,9 +55,9 @@ export class TipAnalyticsService {
         }
 
         const [totalTips, tips] = await Promise.all([
-            this.db.tip.count({ where: { status: 'COMPLETED' } }),
+            this.db.tip.count({ where: { status: 'CONFIRMED' } }),
             this.db.tip.findMany({
-                where: { status: 'COMPLETED' },
+                where: { status: 'CONFIRMED' },
                 include: { sender: true, recipient: true },
                 orderBy: { createdAt: 'desc' }
             })
@@ -71,11 +71,11 @@ export class TipAnalyticsService {
             const amount = BigInt(tip.amount);
             totalAmount += amount;
 
-            if (!tokenMap[tip.token]) {
-                tokenMap[tip.token] = { count: 0, total: BigInt(0) };
+            if (!tokenMap[tip.tokenAddress]) {
+                tokenMap[tip.tokenAddress] = { count: 0, total: BigInt(0) };
             }
-            tokenMap[tip.token].count++;
-            tokenMap[tip.token].total += amount;
+            tokenMap[tip.tokenAddress].count++;
+            tokenMap[tip.tokenAddress].total += amount;
         });
 
         const averageAmount = totalTips > 0 ? totalAmount / BigInt(totalTips) : BigInt(0);
@@ -183,12 +183,12 @@ export class TipAnalyticsService {
 
         const [sentTips, receivedTips] = await Promise.all([
             this.db.tip.findMany({
-                where: { senderId: userId, status: 'COMPLETED' },
+                where: { senderId: userId, status: 'CONFIRMED' },
                 include: { recipient: true },
                 orderBy: { createdAt: 'desc' }
             }),
             this.db.tip.findMany({
-                where: { recipientId: userId, status: 'COMPLETED' },
+                where: { recipientId: userId, status: 'CONFIRMED' },
                 include: { sender: true },
                 orderBy: { createdAt: 'desc' }
             })
@@ -302,7 +302,7 @@ export class TipAnalyticsService {
         if (cached) return JSON.parse(cached);
 
         const tips = await this.db.tip.findMany({
-            where: { status: 'COMPLETED' },
+            where: { status: 'CONFIRMED' },
             orderBy: { createdAt: 'desc' },
             take: limit * 10 // Get more to ensure we have enough data
         });
@@ -362,7 +362,7 @@ export class TipAnalyticsService {
         if (cached) return JSON.parse(cached);
 
         const tips = await this.db.tip.findMany({
-            where: { status: 'COMPLETED' },
+            where: { status: 'CONFIRMED' },
             include: {
                 sender: true,
                 recipient: true
@@ -376,10 +376,10 @@ export class TipAnalyticsService {
             senderId: tip.senderId,
             recipientId: tip.recipientId,
             amount: tip.amount,
-            token: tip.token,
-            message: tip.message,
+            token: tip.tokenAddress,
+            message: tip.messageHash,
             createdAt: tip.createdAt,
-            txHash: tip.txHash
+            txHash: tip.transactionHash
         }));
 
         await this.cache.set(cacheKey, JSON.stringify(feed), 60); // Cache for 1 minute (near real-time)

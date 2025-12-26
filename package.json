@@ -5,6 +5,8 @@
   "license": "MIT",
   "scripts": {
     "dev": "vite --host",
+    "dev:server": "tsx watch server/index.ts",
+    "dev:client": "vite --host",
     "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "start": "NODE_ENV=production node dist/index.js",
     "start:api": "NODE_ENV=production node dist/index.js",
@@ -19,9 +21,14 @@
     "event:listener": "node dist/services/eventListener.js",
     "test": "hardhat test",
     "test:contracts": "hardhat test test/TipRouter.test.ts",
+    "test:backend": "echo 'Backend tests not yet implemented'",
+    "test:all": "pnpm test:contracts && pnpm test:backend",
     "compile": "hardhat compile",
+    "deploy:local": "hardhat run scripts/deploy.ts --network localhost",
     "deploy:testnet": "hardhat run scripts/deploy-testnet.ts --network veryTestnet",
-    "deploy:mainnet": "hardhat run scripts/deploy.ts --network very"
+    "deploy:mainnet": "hardhat run scripts/deploy.ts --network very",
+    "demo": "node scripts/demo-run.js",
+    "demo:sign": "node scripts/demo-sign.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -53,6 +60,7 @@
     "@radix-ui/react-toggle": "^1.1.10",
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@radix-ui/react-tooltip": "^1.2.8",
+    "@supabase/supabase-js": "^2.89.0",
     "axios": "^1.12.0",
     "bull": "^4.14.0",
     "bullmq": "^5.66.2",

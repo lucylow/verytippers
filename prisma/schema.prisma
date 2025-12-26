@@ -350,3 +350,99 @@ enum WebhookStatus {
   FAILED
   RETRY
 }
+
+model NFT {
+  id         Int      @id @default(autoincrement())
+  tokenId    BigInt
+  contract   String
+  owner      String
+  tokenURI   String
+  mintedAt   DateTime @default(now())
+  metadata   Json?    // optional parsed metadata (name, description, image, attributes)
+  
+  // Relationships
+  listings   Listing[]
+  
+  // Indexes
+  @@index([tokenId])
+  @@index([contract])
+  @@index([owner])
+  @@index([mintedAt])
+  @@unique([contract, tokenId])
+}
+
+model Listing {
+  id         Int      @id @default(autoincrement())
+  listingId  BigInt   // on-chain listing id
+  nftId      Int
+  seller     String
+  price      String   // store as string to avoid precision issues
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  // Relationships
+  NFT        NFT      @relation(fields: [nftId], references: [id])
+  
+  // Indexes
+  @@index([listingId])
+  @@index([nftId])
+  @@index([seller])
+  @@index([active])
+  @@index([createdAt])
+  @@unique([listingId])
+}
+
+model Ad {
+  id           String   @id @default(cuid())
+  advertiser   String
+  title        String
+  description  String?
+  imageUrl     String?
+  targetTags   String[] @default([])
+  targetGuild  String?  // optional: community/server id
+  url          String
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  impressions  Int      @default(0)
+  clicks       Int      @default(0)
+  budget       Float    @default(0.0) // off-chain budget
+  
+  // Relationships
+  adImpressions AdImpression[]
+  adClicks      AdClick[]
+  
+  // Indexes
+  @@index([active])
+  @@index([targetGuild])
+  @@index([createdAt])
+}
+
+model AdImpression {
+  id        String   @id @default(cuid())
+  adId      String
+  userId    String?  // optional (if user is known)
+  ipHash    String?  // store a hash of IP for privacy
+  createdAt DateTime @default(now())
+  ad        Ad       @relation(fields: [adId], references: [id], onDelete: Cascade)
+  
+  // Indexes
+  @@index([adId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model AdClick {
+  id        String   @id @default(cuid())
+  adId      String
+  userId    String?  // optional
+  ipHash    String?  // hashed ip
+  createdAt DateTime @default(now())
+  ad        Ad       @relation(fields: [adId], references: [id], onDelete: Cascade)
+  
+  // Indexes
+  @@index([adId])
+  @@index([userId])
+  @@index([createdAt])
+}

@@ -169,17 +169,30 @@ export const VoiceTippingButton: React.FC = () => {
       </motion.div>
 
       {/* Status indicator */}
-      <div className={`w-3 h-3 rounded-full ${
-        isListening 
-          ? 'bg-red-500 animate-ping' 
-          : 'bg-slate-500/50'
-      }`} />
+      <motion.div
+        animate={{
+          scale: isListening ? [1, 1.2, 1] : 1,
+        }}
+        transition={{ duration: 1, repeat: isListening ? Infinity : 0 }}
+        className={`w-3 h-3 rounded-full ${
+          isListening 
+            ? 'bg-red-500 animate-ping' 
+            : 'bg-slate-500/50'
+        }`} 
+      />
       
-      {!isConnected && (
-        <div className="text-xs text-slate-500 text-right -mt-4">
-          Connect wallet
-        </div>
-      )}
+      {/* Status Text */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className={`text-xs font-mono tracking-wide text-right ${
+          isListening 
+            ? 'text-red-400 animate-pulse' 
+            : 'text-slate-500'
+        }`}
+      >
+        {isListening ? '🎤 Listening...' : isConnected ? 'Tap to speak' : 'Connect wallet'}
+      </motion.div>
     </div>
   );
 };

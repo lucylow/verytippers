@@ -10,6 +10,18 @@ import { buildMetaTx, validateMetaTx, isMetaTxExpired, formatTimeRemaining, Meta
 import { signMetaTx, signMetaTxAuto, getSignerAddress, verifyMetaTxSignature } from './signMetaTx';
 import { getGasBudget, chargeGas, estimateGasCostUSD, hasEnoughBudget, getFormattedBudget } from './relayerBudget';
 import { subscribeTips, subscribeBadges, fetchPastTips, TipEvent, BadgeEvent } from './indexer';
+import {
+  getVeryTokenInfo,
+  transferVeryTokens,
+  approveVeryTokens,
+  getVeryTokenAllowance,
+  hasEnoughAllowance,
+  transferFromVeryTokens,
+  getVeryTokenContract,
+  type TokenInfo,
+  type TransferResult,
+  type ApproveResult
+} from './veryToken';
 import { CONTRACTS, API_ENDPOINTS, FEATURES } from './config';
 import { ethers } from 'ethers';
 
@@ -248,6 +260,17 @@ export {
   fetchPastTips,
   type TipEvent,
   type BadgeEvent,
+  // VERY Token
+  getVeryTokenInfo,
+  transferVeryTokens,
+  approveVeryTokens,
+  getVeryTokenAllowance,
+  hasEnoughAllowance,
+  transferFromVeryTokens,
+  getVeryTokenContract,
+  type TokenInfo,
+  type TransferResult,
+  type ApproveResult,
   // Config
   CONTRACTS,
   API_ENDPOINTS,

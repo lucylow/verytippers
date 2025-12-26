@@ -1,6 +1,19 @@
 import axios, { AxiosInstance } from 'axios';
 import { config } from '../../config/config';
 
+/**
+ * VeryChat API Service
+ * 
+ * Integration with VeryChat API for hackathon projects
+ * Base URL: https://gapi.veryapi.io
+ * 
+ * Reference: https://developers.verylabs.io/
+ * 
+ * Setup:
+ * 1. Register your project at https://developers.verylabs.io/
+ * 2. Obtain Project ID and API Key
+ * 3. Set VERYCHAT_PROJECT_ID and VERYCHAT_API_KEY in environment variables
+ */
 interface VeryChatUser {
   id: string;
   username: string;
@@ -10,22 +23,53 @@ interface VeryChatUser {
   createdAt: string;
 }
 
+interface VeryChatAuthResponse {
+  verified: boolean;
+  userId: string;
+  walletAddress?: string;
+}
+
 export class VerychatApiService {
   private client: AxiosInstance;
   private cache: Map<string, { user: VeryChatUser; timestamp: number }> = new Map();
   private cacheTTL = 5 * 60 * 1000; // 5 minutes
 
   constructor() {
+    const baseURL = config.VERYCHAT_API.BASE_URL || 'https://gapi.veryapi.io';
+    const projectId = config.VERYCHAT_API.PROJECT_ID;
+    const apiKey = config.VERYCHAT_API.API_KEY;
+
+    if (!projectId) {
+      console.warn('VERYCHAT_PROJECT_ID is not set. Register your project at https://developers.verylabs.io/');
+    }
+
     this.client = axios.create({
-      baseURL: config.VERYCHAT_API.BASE_URL,
+      baseURL,
       headers: {
-        'X-Project-ID': config.VERYCHAT_API.PROJECT_ID,
-        'X-API-Key': config.VERYCHAT_API.API_KEY,
+        'X-Project-ID': projectId || '',
+        'X-API-Key': apiKey || '',
         'Content-Type': 'application/json'
-      }
+      },
+      timeout: 10000 // 10 second timeout
     });
+
+    // Add request interceptor for error handling
+    this.client.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (error.response?.status === 401) {
+          console.error('VeryChat API authentication failed. Check your Project ID and API Key.');
+        }
+        return Promise.reject(error);
+      }
+    );
   }
 
+  /**
+   * Get user information from VeryChat
+   * @param userId - VeryChat user ID
+   * @returns User information including wallet address
+   */
   async getUser(userId: string): Promise<VeryChatUser> {
     // Check cache first
     const cached = this.cache.get(userId);
@@ -35,6 +79,7 @@ export class VerychatApiService {
 
     try {
       // Using hackathon API endpoint for user lookup
+      // Endpoint: GET /hackathon/users/{userId}
       const response = await this.client.get(`/hackathon/users/${userId}`);
       const user: VeryChatUser = response.data;
       
@@ -46,7 +91,31 @@ export class VerychatApiService {
       if (error.response?.status === 404) {
         throw new Error(`User ${userId} not found in VeryChat`);
       }
+      if (error.response?.status === 401) {
+        throw new Error('VeryChat API authentication failed. Check your Project ID and API Key.');
+      }
       throw new Error(`Failed to fetch user: ${error.message}`);
+    }
+  }
+
+  /**
+   * Verify user identity using verification code
+   * @param userId - VeryChat user ID
+   * @param verificationCode - Verification code from user
+   * @returns Authentication result with wallet address if available
+   */
+  async verifyUser(userId: string, verificationCode: string): Promise<VeryChatAuthResponse> {
+    try {
+      const response = await this.client.post('/hackathon/auth/verify', {
+        user_id: userId,
+        verification_code: verificationCode
+      });
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        throw new Error('Invalid verification code');
+      }
+      throw new Error(`Failed to verify user: ${error.message}`);
     }
   }
 

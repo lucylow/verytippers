@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
 import { Link } from "wouter";
+import { WalletButton } from "./WalletButton";
 
 export const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -16,7 +17,7 @@ export const Navbar = () => {
             </span>
           </div>
 
-          <div className="hidden md:flex items-center gap-8">
+          <div className="hidden md:flex items-center gap-4">
             <a href="#features" className="text-muted-foreground hover:text-foreground transition-colors font-medium">
               Features
             </a>
@@ -32,6 +33,7 @@ export const Navbar = () => {
             <a href="#team" className="text-muted-foreground hover:text-foreground transition-colors font-medium">
               Team
             </a>
+            <WalletButton />
             <button className="gradient-bg text-primary-foreground px-5 py-2.5 rounded-xl font-semibold hover:opacity-90 transition-opacity flex items-center gap-2">
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
@@ -55,6 +57,7 @@ export const Navbar = () => {
             <a href="#integration" className="text-muted-foreground hover:text-foreground transition-colors">Integration</a>
             <Link href="/dao" className="text-muted-foreground hover:text-foreground transition-colors">DAO</Link>
             <a href="#team" className="text-muted-foreground hover:text-foreground transition-colors">Team</a>
+            <WalletButton />
             <button className="gradient-bg text-primary-foreground px-5 py-2.5 rounded-xl font-semibold w-full">
               Try in VeryChat
             </button>

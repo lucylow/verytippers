@@ -270,7 +270,7 @@ Generate 3-5 personalized insights (most important first). Return ONLY valid JSO
     const tipsSent = await db.tip.findMany({
       where: {
         senderId: userId,
-        status: 'COMPLETED',
+        status: 'CONFIRMED',
         createdAt: { gte: startDate }
       },
       include: { recipient: true }
@@ -279,7 +279,7 @@ Generate 3-5 personalized insights (most important first). Return ONLY valid JSO
     const tipsReceived = await db.tip.findMany({
       where: {
         recipientId: userId,
-        status: 'COMPLETED',
+        status: 'CONFIRMED',
         createdAt: { gte: startDate }
       }
     });
@@ -329,7 +329,7 @@ Generate 3-5 personalized insights (most important first). Return ONLY valid JSO
     // Fetch all tips and calculate stats manually since amount is a String type
     const allTips = await db.tip.findMany({
       where: {
-        status: 'COMPLETED',
+        status: 'CONFIRMED',
         createdAt: { gte: startDate }
       },
       select: {

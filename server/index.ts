@@ -12,7 +12,9 @@ import { BadgeService } from './services/BadgeService';
 import { LeaderboardInsightsService } from './services/LeaderboardInsightsService';
 import { ModerationService } from './services/ModerationService';
 import { ModerationPipeline } from './services/moderationPipeline';
+import { NFTService } from './services/NFTService';
 import { config } from './config';
+import adsRouter from './routes/ads';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -27,6 +29,7 @@ const aiTipSuggestionService = new AITipSuggestionService();
 const aiService = new AIService();
 const moderationService = new ModerationService();
 const moderationPipeline = new ModerationPipeline();
+const nftService = new NFTService();
 
 async function startServer() {
     const app = express();
@@ -34,7 +37,14 @@ async function startServer() {
 
     app.use(express.json());
 
+    // Trust proxy for accurate IP addresses
+    app.set('trust proxy', true);
+
     // --- API Endpoints (Backend, AI, Web3 Logic) ---
+
+    // Ads API routes
+    app.use('/api/ads', adsRouter);
+    app.use('/api/admin', adsRouter);
 
     // Health Check Endpoint
     app.get('/health', (_req: Request, res: Response) => {
@@ -804,6 +814,188 @@ Return ONLY valid JSON matching the schema.`;
         } catch (error) {
             console.error('Error fetching badge stats:', error);
             res.status(500).json({ success: false, message: 'Failed to fetch badge stats' });
+        }
+    });
+
+    // --- NFT Marketplace API Endpoints ---
+
+    // Mint NFT
+    app.post('/api/nft/mint', async (req: Request, res: Response) => {
+        try {
+            const { toAddress, name, description, imageBase64, imageUrl, attributes, boostMultiplier } = req.body;
+
+            if (!toAddress || !name || !description) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Missing required fields: toAddress, name, description'
+                });
+            }
+
+            if (!imageBase64 && !imageUrl) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Either imageBase64 or imageUrl is required'
+                });
+            }
+
+            const result = await nftService.mint({
+                toAddress,
+                name,
+                description,
+                imageBase64,
+                imageUrl,
+                attributes,
+                boostMultiplier
+            });
+
+            res.status(200).json({
+                success: true,
+                data: result
+            });
+        } catch (error: any) {
+            console.error('Error minting NFT:', error);
+            res.status(500).json({
+                success: false,
+                message: error.message || 'Failed to mint NFT'
+            });
+        }
+    });
+
+    // List NFT for sale
+    app.post('/api/nft/list', async (req: Request, res: Response) => {
+        try {
+            const { nftContract, tokenId, price } = req.body;
+
+            if (!nftContract || tokenId === undefined || !price) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Missing required fields: nftContract, tokenId, price'
+                });
+            }
+
+            const result = await nftService.list({
+                nftContract,
+                tokenId: Number(tokenId),
+                price
+            });
+
+            res.status(200).json({
+                success: true,
+                data: result
+            });
+        } catch (error: any) {
+            console.error('Error listing NFT:', error);
+            res.status(500).json({
+                success: false,
+                message: error.message || 'Failed to list NFT'
+            });
+        }
+    });
+
+    // Buy listed NFT
+    app.post('/api/nft/buy', async (req: Request, res: Response) => {
+        try {
+            const { listingId, buyerAddress } = req.body;
+
+            if (!listingId || !buyerAddress) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Missing required fields: listingId, buyerAddress'
+                });
+            }
+
+            const result = await nftService.buy(
+                { listingId: Number(listingId) },
+                buyerAddress
+            );
+
+            res.status(200).json({
+                success: true,
+                data: result
+            });
+        } catch (error: any) {
+            console.error('Error buying NFT:', error);
+            res.status(500).json({
+                success: false,
+                message: error.message || 'Failed to buy NFT'
+            });
+        }
+    });
+
+    // Get NFT details
+    app.get('/api/nft/:contract/:tokenId', async (req: Request, res: Response) => {
+        try {
+            const { contract, tokenId } = req.params;
+            const nft = await nftService.getNFT(contract, Number(tokenId));
+
+            if (!nft) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'NFT not found'
+                });
+            }
+
+            res.status(200).json({
+                success: true,
+                data: nft
+            });
+        } catch (error: any) {
+            console.error('Error fetching NFT:', error);
+            res.status(500).json({
+                success: false,
+                message: error.message || 'Failed to fetch NFT'
+            });
+        }
+    });
+
+    // Get active listings
+    app.get('/api/nft/marketplace/listings', async (req: Request, res: Response) => {
+        try {
+            const limit = parseInt(req.query.limit as string) || 50;
+            const offset = parseInt(req.query.offset as string) || 0;
+
+            const listings = await nftService.getActiveListings(limit, offset);
+
+            res.status(200).json({
+                success: true,
+                data: listings
+            });
+        } catch (error: any) {
+            console.error('Error fetching listings:', error);
+            res.status(500).json({
+                success: false,
+                message: error.message || 'Failed to fetch listings'
+            });
+        }
+    });
+
+    // Get user's NFTs
+    app.get('/api/nft/user/:address', async (req: Request, res: Response) => {
+        try {
+            const { address } = req.params;
+            const nfts = await nftService.getUserNFTs(address);
+
+            res.status(200).json({
+                success: true,
+                data: nfts
+            });
+        } catch (error: any) {
+            console.error('Error fetching user NFTs:', error);
+            res.status(500).json({
+                success: false,
+                message: error.message || 'Failed to fetch user NFTs'
+            });
+        }
+    });
+
+    // --- VeryChat Webhook Integration ---
+    app.post('/webhook/verychat', async (req: Request, res: Response) => {
+        try {
+            const { handleVeryChatWebhook } = await import('./integrations/verychat');
+            await handleVeryChatWebhook(req, res);
+        } catch (error) {
+            console.error('Error handling VeryChat webhook:', error);
+            res.status(500).json({ success: false, error: 'Internal server error' });
         }
     });
 

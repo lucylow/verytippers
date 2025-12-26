@@ -43,6 +43,8 @@ export const config = {
     TIP_CONTRACT_ADDRESS: process.env.TIP_CONTRACT_ADDRESS || '0xTipContractAddress',
     BADGE_CONTRACT_ADDRESS: process.env.BADGE_CONTRACT_ADDRESS || '0xBadgeContractAddress',
     VERY_TOKEN_ADDRESS: process.env.VERY_TOKEN_ADDRESS || '0xVeryTokenAddress',
+    NFT_CONTRACT_ADDRESS: process.env.NFT_CONTRACT_ADDRESS || '0xNFTContractAddress',
+    MARKETPLACE_CONTRACT_ADDRESS: process.env.MARKETPLACE_CONTRACT_ADDRESS || '0xMarketplaceAddress',
 
     // AI/HuggingFace
     HUGGINGFACE_API_KEY: process.env.HUGGINGFACE_API_KEY || 'dummy_hf_key',
