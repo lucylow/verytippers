@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import { TipService } from './services/TipService';
 import { TipAnalyticsService } from './services/TipAnalyticsService';
 import { HuggingFaceService } from './services/HuggingFaceService';
+import { ContentService } from './services/ContentService';
 import { config } from './config';
 
 const __filename = fileURLToPath(import.meta.url);

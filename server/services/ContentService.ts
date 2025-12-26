@@ -321,13 +321,13 @@ export class ContentService {
             }
 
             // Calculate average tip amount
-            const tips = content.tips.filter(t => t.status === 'COMPLETED');
-            const totalTipAmount = tips.reduce((sum, tip) => sum + parseFloat(tip.amount || '0'), 0);
+            const tips = content.tips.filter((t: { status: string }) => t.status === 'COMPLETED');
+            const totalTipAmount = tips.reduce((sum: number, tip: { amount?: string | null }) => sum + parseFloat(tip.amount || '0'), 0);
             const averageTipAmount = tips.length > 0 ? (totalTipAmount / tips.length).toFixed(6) : '0';
 
             // Get top contributors
             const contributorMap = new Map<string, number>();
-            tips.forEach(tip => {
+            tips.forEach((tip: { senderId: string; amount?: string | null }) => {
                 const current = contributorMap.get(tip.senderId) || 0;
                 contributorMap.set(tip.senderId, current + parseFloat(tip.amount || '0'));
             });

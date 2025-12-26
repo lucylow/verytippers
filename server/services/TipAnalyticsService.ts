@@ -2,6 +2,12 @@ import { DatabaseService } from './DatabaseService';
 import { CacheService } from './CacheService';
 import { Prisma } from '@prisma/client';
 
+type TipWithRelations = Prisma.TipGetPayload<{
+    include: { sender: true; recipient: true }
+}>;
+
+type Tip = Prisma.TipGetPayload<{}>;
+
 export interface TipStats {
     totalTips: number;
     totalAmount: string;
@@ -130,10 +136,10 @@ export class TipAnalyticsService {
         // Tips by day (last 30 days)
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        const recentTips = tips.filter(t => new Date(t.createdAt) >= thirtyDaysAgo);
+        const recentTips = tips.filter((t: TipWithRelations) => new Date(t.createdAt) >= thirtyDaysAgo);
         const dayMap: { [date: string]: { count: number; total: bigint } } = {};
 
-        recentTips.forEach(tip => {
+        recentTips.forEach((tip: TipWithRelations) => {
             const date = new Date(tip.createdAt).toISOString().split('T')[0];
             if (!dayMap[date]) {
                 dayMap[date] = { count: 0, total: BigInt(0) };
@@ -192,11 +198,11 @@ export class TipAnalyticsService {
         let totalSent = BigInt(0);
         let totalReceived = BigInt(0);
 
-        sentTips.forEach(tip => {
+        sentTips.forEach((tip: TipWithRelations) => {
             totalSent += BigInt(tip.amount);
         });
 
-        receivedTips.forEach(tip => {
+        receivedTips.forEach((tip: TipWithRelations) => {
             totalReceived += BigInt(tip.amount);
         });
 
@@ -205,7 +211,7 @@ export class TipAnalyticsService {
 
         // Favorite recipients
         const recipientMap: { [key: string]: { count: number; total: bigint } } = {};
-        sentTips.forEach(tip => {
+        sentTips.forEach((tip: TipWithRelations) => {
             if (!recipientMap[tip.recipientId]) {
                 recipientMap[tip.recipientId] = { count: 0, total: BigInt(0) };
             }
@@ -224,7 +230,7 @@ export class TipAnalyticsService {
 
         // Favorite senders
         const senderMap: { [key: string]: { count: number; total: bigint } } = {};
-        receivedTips.forEach(tip => {
+        receivedTips.forEach((tip: TipWithRelations) => {
             if (!senderMap[tip.senderId]) {
                 senderMap[tip.senderId] = { count: 0, total: BigInt(0) };
             }
@@ -303,7 +309,7 @@ export class TipAnalyticsService {
 
         const periodMap: { [key: string]: { count: number; total: bigint } } = {};
 
-        tips.forEach(tip => {
+        tips.forEach((tip: Tip) => {
             const date = new Date(tip.createdAt);
             let key: string;
 
@@ -365,7 +371,7 @@ export class TipAnalyticsService {
             take: limit
         });
 
-        const feed = tips.map(tip => ({
+        const feed = tips.map((tip: TipWithRelations) => ({
             id: tip.id,
             senderId: tip.senderId,
             recipientId: tip.recipientId,
@@ -392,7 +398,7 @@ export class TipAnalyticsService {
             // Clear all analytics cache
             const keys = ['analytics:platform-stats', 'analytics:trends', 'analytics:feed'];
             for (const key of keys) {
-                await this.cache.delete(key);
+                await this.cache.del(key);
             }
         }
     }
