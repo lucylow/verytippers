@@ -392,24 +392,47 @@ class VeryTippersBackend {
    */
   private setupErrorHandlers(): void {
     this.fastify.setErrorHandler((error, request, reply) => {
-      logger.error('Request error', {
-        error: error.message,
-        stack: error.stack,
-        url: request.url,
-        method: request.method
+      const { ErrorHandler, AppError, NotFoundError } = require('./utils/errors');
+      
+      // Normalize error to AppError
+      const appError = ErrorHandler.normalizeError(error, {
+        path: request.url,
+        method: request.method,
+        userId: (request as any).user?.id,
+        ip: request.ip,
+        userAgent: request.headers['user-agent'],
       });
 
-      reply.status(error.statusCode || 500).send({
-        error: error.message || 'Internal server error',
-        statusCode: error.statusCode || 500
+      // Log the error
+      ErrorHandler.logError(appError, {
+        path: request.url,
+        method: request.method,
       });
+
+      // Format error response
+      const errorResponse = ErrorHandler.formatErrorResponse(
+        appError,
+        process.env.NODE_ENV === 'development'
+      );
+
+      reply.status(appError.statusCode).send(errorResponse);
     });
 
     this.fastify.setNotFoundHandler((request, reply) => {
-      reply.status(404).send({
-        error: 'Not found',
-        path: request.url
+      const { ErrorHandler, NotFoundError } = require('./utils/errors');
+      
+      const error = new NotFoundError('Route', {
+        path: request.url,
+        method: request.method,
       });
+
+      logger.warn('Route not found', {
+        path: request.url,
+        method: request.method,
+      });
+
+      const errorResponse = ErrorHandler.formatErrorResponse(error);
+      reply.status(404).send(errorResponse);
     });
   }
 
