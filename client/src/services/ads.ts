@@ -1,22 +1,11 @@
-// src/services/ads.ts - Ads API client
+// src/services/ads.ts - Ads API client (wrapper for backward compatibility)
+// This file maintains backward compatibility while using the centralized API client
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+import { getAdSlot as getAdSlotApi, recordImpression as recordImpressionApi, recordClick as recordClickApi } from '@/lib/api';
+import type { Ad, RecordImpressionRequest, RecordClickRequest } from '@/lib/api/types';
 
-export interface Ad {
-  id: string;
-  advertiser: string;
-  title: string;
-  description?: string;
-  imageUrl?: string;
-  targetTags: string[];
-  targetGuild?: string;
-  impressions: number;
-  clicks: number;
-}
-
-export interface AdSlotResponse {
-  ad: Ad | null;
-}
+// Re-export types for backward compatibility
+export type { Ad };
 
 export interface ImpressionRequest {
   adId: string;
@@ -30,31 +19,13 @@ export interface ClickRequest {
   ipHash?: string;
 }
 
-export interface ClickResponse {
-  redirectUrl: string;
-  success: boolean;
-}
-
 /**
  * Get an ad slot for display
  */
 export async function getAdSlot(tags?: string[], guild?: string): Promise<Ad | null> {
   try {
-    const params = new URLSearchParams();
-    if (tags && tags.length > 0) {
-      tags.forEach(tag => params.append('tags[]', tag));
-    }
-    if (guild) {
-      params.append('guild', guild);
-    }
-
-    const response = await fetch(`${API_BASE_URL}/api/ads/slot?${params.toString()}`);
-    if (!response.ok) {
-      throw new Error('Failed to fetch ad slot');
-    }
-
-    const data: AdSlotResponse = await response.json();
-    return data.ad;
+    const result = await getAdSlotApi({ tags, guild });
+    return result.ad || null;
   } catch (error) {
     console.error('Error fetching ad slot:', error);
     return null;
@@ -66,20 +37,8 @@ export async function getAdSlot(tags?: string[], guild?: string): Promise<Ad | n
  */
 export async function recordImpression(request: ImpressionRequest): Promise<boolean> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/ads/impression`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(request),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to record impression');
-    }
-
-    const data = await response.json();
-    return data.success || data.ok || false;
+    const result = await recordImpressionApi(request as RecordImpressionRequest);
+    return result.success;
   } catch (error) {
     console.error('Error recording impression:', error);
     return false;
@@ -91,20 +50,8 @@ export async function recordImpression(request: ImpressionRequest): Promise<bool
  */
 export async function recordClick(request: ClickRequest): Promise<string | null> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/ads/click`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(request),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to record click');
-    }
-
-    const data: ClickResponse = await response.json();
-    return data.redirectUrl || null;
+    const result = await recordClickApi(request as RecordClickRequest);
+    return result.success ? result.redirectUrl : null;
   } catch (error) {
     console.error('Error recording click:', error);
     return null;

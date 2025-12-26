@@ -24,6 +24,7 @@ import { NetworkSelector } from "./components/NetworkSelector";
 import MobileShell from "./components/MobileShell";
 import { TransactionAnnouncerProvider } from "./components/accessibility";
 import { ScrollToTop } from "./components/ScrollToTop";
+import { ApiClientSetup } from "./components/ApiClientSetup";
 
 // Import improved error handling utilities
 import { categorizeError, type CategorizedError } from "@/lib/errors/errorTypes";
@@ -551,6 +552,7 @@ function App() {
             <NetworkProvider>
               <ContextProviderWrapper>
                 <WalletProvider>
+                  <ApiClientSetup />
                   <ContextProviderWrapper>
                     <TooltipProvider>
                       <Toaster />

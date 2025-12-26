@@ -41,7 +41,7 @@ router.post('/indexer/webhook', async (req: Request, res: Response) => {
         p_tx_hash: txHash,
         p_confirmations: confirmations || 1,
         p_status: status || 'confirmed'
-      });
+      } as any);
 
     // If RPC doesn't exist, fall back to direct update
     if (tipError && tipError.message?.includes('function') && tipError.message?.includes('does not exist')) {
@@ -53,24 +53,31 @@ router.post('/indexer/webhook', async (req: Request, res: Response) => {
         .single();
 
       if (existingTip) {
-        // Only update if status is progressing forward
-        const statusOrder = { pending: 0, submitted: 1, confirmed: 2, failed: -1 };
-        const currentStatus = statusOrder[existingTip.status as keyof typeof statusOrder] || 0;
-        const newStatus = statusOrder[status as keyof typeof statusOrder] || 0;
+        const tipStatus = (existingTip as any).status;
+        const tipConfirmations = (existingTip as any).confirmations;
+        
+        if (tipStatus !== undefined && tipConfirmations !== undefined) {
+          // Only update if status is progressing forward
+          const statusOrder: Record<string, number> = { pending: 0, submitted: 1, confirmed: 2, failed: -1 };
+          const currentStatus = statusOrder[tipStatus as string] || 0;
+          const newStatus = statusOrder[status as string] || 0;
 
-        if (newStatus > currentStatus || (status === 'confirmed' && existingTip.status !== 'confirmed')) {
-          const { error: updateError } = await supabase
-            .from('tips')
-            .update({
+          if (newStatus > currentStatus || (status === 'confirmed' && tipStatus !== 'confirmed')) {
+            const updatePayload: Record<string, any> = {
               relayer_tx_hash: txHash,
-              confirmations: Math.max(existingTip.confirmations || 0, confirmations || 1),
+              confirmations: Math.max(tipConfirmations || 0, confirmations || 1),
               status: status || (confirmations >= 12 ? 'confirmed' : 'submitted')
-            })
-            .eq('id', tipId);
+            };
+            // @ts-ignore - Supabase types don't properly infer table schema
+            const { error: updateError } = await (supabase as any)
+              .from('tips')
+              .update(updatePayload)
+              .eq('id', tipId);
 
-          if (updateError) {
-            console.error('Error updating tip:', updateError);
-            return res.status(500).json({ error: 'Failed to update tip' });
+            if (updateError) {
+              console.error('Error updating tip:', updateError);
+              return res.status(500).json({ error: 'Failed to update tip' });
+            }
           }
         }
       } else {
@@ -87,7 +94,7 @@ router.post('/indexer/webhook', async (req: Request, res: Response) => {
       action: 'indexer_webhook',
       actor: 'indexer',
       detail: { txHash, confirmations, status }
-    });
+    } as any);
 
     res.json({ ok: true, tipId, txHash });
   } catch (e: any) {

@@ -65,7 +65,7 @@ Organized API functions by domain:
 - **Analytics** (`client/src/lib/api/analytics.ts`): `getPlatformAnalytics`, `getUserAnalytics`, `getTipFeed`
 - **Badges** (`client/src/lib/api/badges.ts`): `getUserBadges`, `checkBadges`, `getUserBadgeStats`
 
-### 4. Error Handling
+### 5. Error Handling
 
 Three error classes for different error scenarios:
 - `ApiError`: General API errors with status codes
@@ -78,7 +78,7 @@ All errors include:
 - Error codes for programmatic handling
 - Original error data for debugging
 
-### 5. Retry Logic
+### 6. Retry Logic
 
 Automatic retry for:
 - Network errors (connection failures)
@@ -98,7 +98,7 @@ await apiClient.post('/api/v1/tip', data, {
 });
 ```
 
-### 6. Request Interceptors
+### 7. Request Interceptors
 
 Support for adding authentication, logging, etc.:
 
@@ -111,7 +111,14 @@ setupDefaultInterceptors({
 });
 ```
 
-### 7. Updated Components
+### 8. Wallet Integration
+
+API client is automatically configured with wallet context through `ApiClientSetup` component, which:
+- Sets up user ID interceptor using wallet address
+- Updates interceptors when wallet connects/disconnects
+- Provides seamless integration with wallet context
+
+### 9. Updated Components
 
 The following components have been updated to use the centralized API client:
 - `TipForm.tsx` - Send tips
@@ -231,9 +238,15 @@ Potential future enhancements:
 - `client/src/lib/api/tips.ts` - Tip API functions
 - `client/src/lib/api/analytics.ts` - Analytics API functions
 - `client/src/lib/api/badges.ts` - Badge API functions
+- `client/src/lib/api/rewards.ts` - Rewards API functions
+- `client/src/lib/api/checkout.ts` - Checkout API functions
+- `client/src/lib/api/ads.ts` - Ads API functions
+- `client/src/lib/api/moderation.ts` - Moderation and Voice API functions
 - `client/src/lib/api/interceptors.ts` - Request/response interceptors
+- `client/src/lib/api/setup.ts` - API client setup utilities
 - `client/src/lib/api/index.ts` - Main export file
 - `client/src/lib/api/README.md` - API client documentation
+- `client/src/components/ApiClientSetup.tsx` - Component for setting up API interceptors
 
 ### Updated Files
 - `client/src/components/TipForm.tsx`
@@ -244,7 +257,11 @@ Potential future enhancements:
 - `client/src/components/SocialProfile.tsx`
 - `client/src/components/WalletConnect.tsx`
 - `client/src/components/BadgeDisplay.tsx`
+- `client/src/components/CheckoutModal.tsx` - Migrated to use centralized API client
 - `client/src/hooks/useAchievementEngine.ts`
+- `client/src/hooks/useRewards.ts` - Migrated to use centralized API client
+- `client/src/services/ads.ts` - Migrated to use centralized API client (maintains backward compatibility)
+- `client/src/App.tsx` - Added API client setup component
 
 ## Testing
 

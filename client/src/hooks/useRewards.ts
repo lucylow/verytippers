@@ -6,8 +6,10 @@
 import { useState, useCallback } from 'react';
 import { ethers } from 'ethers';
 import { useWallet } from '@/contexts/WalletContext';
-import { claimReward, isRewardClaimed, getRewardsContractInfo, type SignedRewardPayload, type ClaimRewardResult } from '@/lib/web3/rewards';
+import { claimReward, isRewardClaimed, getRewardsContractInfo, type SignedRewardPayload as Web3SignedRewardPayload, type ClaimRewardResult } from '@/lib/web3/rewards';
 import { getVeryBalance } from '@/lib/web3/balance';
+import { issueReward as issueRewardApi, evaluateReward, getRewardInfo, getRewardTable as getRewardTableApi } from '@/lib/api';
+import type { EvaluateRewardRequest, SignedRewardPayload } from '@/lib/api/types';
 
 export enum RewardActionType {
     TIP_SENT = 'TIP_SENT',
@@ -50,8 +52,6 @@ export interface UseRewardsReturn {
     getRewardTable: () => Promise<Record<string, string>>;
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-
 /**
  * Hook for $VERY token rewards
  */
@@ -86,25 +86,17 @@ export function useRewards(): UseRewardsReturn {
         try {
             setError(null);
 
-            const response = await fetch(`${API_BASE_URL}/api/rewards/issue`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    user: address,
-                    actionType,
-                    context
-                })
+            const result = await issueRewardApi({
+                user: address,
+                actionType: actionType as string,
+                context,
             });
 
-            const data = await response.json();
-
-            if (!response.ok || !data.success) {
-                throw new Error(data.error || 'Failed to issue reward');
+            if (!result.success || !result.data) {
+                throw new Error(result.error || 'Failed to issue reward');
             }
 
-            return data.data as SignedRewardPayload;
+            return result.data;
         } catch (err: any) {
             const errorMessage = err.message || 'Failed to issue reward';
             setError(errorMessage);
@@ -130,7 +122,20 @@ export function useRewards(): UseRewardsReturn {
         setError(null);
 
         try {
-            const result = await claimReward(payload, signer);
+            // Convert API payload format to web3 format
+            // Extract signature components from signature string
+            const sig = ethers.Signature.from(payload.signature);
+            const web3Payload: Web3SignedRewardPayload = {
+                user: payload.user,
+                amount: payload.amount,
+                reason: payload.actionType, // Use actionType as reason
+                nonce: parseInt(payload.nonce, 10),
+                signature: payload.signature,
+                v: sig.v,
+                r: sig.r,
+                s: sig.s,
+            };
+            const result = await claimReward(web3Payload, signer);
             
             if (result.success) {
                 // Refresh balance after successful claim
@@ -160,23 +165,27 @@ export function useRewards(): UseRewardsReturn {
         context?: any
     ): Promise<RewardEligibility> => {
         try {
-            const params = new URLSearchParams({
-                actionType
-            });
+            const request: EvaluateRewardRequest = {
+                actionType: actionType as string,
+                tipAmount: context?.tipAmount,
+                contentQualityScore: context?.contentQualityScore,
+                streakDays: context?.streakDays,
+                referralVerified: context?.referralVerified,
+            };
 
-            if (context?.tipAmount) params.append('tipAmount', context.tipAmount.toString());
-            if (context?.contentQualityScore) params.append('contentQualityScore', context.contentQualityScore.toString());
-            if (context?.streakDays) params.append('streakDays', context.streakDays.toString());
-            if (context?.referralVerified !== undefined) params.append('referralVerified', context.referralVerified.toString());
+            const result = await evaluateReward(request);
 
-            const response = await fetch(`${API_BASE_URL}/api/rewards/evaluate?${params.toString()}`);
-            const data = await response.json();
-
-            if (!response.ok || !data.success) {
-                throw new Error(data.error || 'Failed to check eligibility');
+            if (!result.success || !result.data) {
+                throw new Error(result.error || 'Failed to check eligibility');
             }
 
-            return data.data as RewardEligibility;
+            return {
+                eligible: result.data.eligible,
+                amount: result.data.amount,
+                amountFormatted: result.data.amountFormatted,
+                reason: result.data.reason || actionType,
+                error: result.data.error,
+            };
         } catch (err: any) {
             return {
                 eligible: false,
@@ -195,10 +204,32 @@ export function useRewards(): UseRewardsReturn {
         if (!provider) return;
 
         try {
-            const info = await getRewardsContractInfo(provider);
-            setContractInfo(info);
+            // Try to get info from API first, fallback to on-chain
+            const apiResult = await getRewardInfo();
+            if (apiResult.success && apiResult.data?.contract) {
+                const contract = apiResult.data.contract;
+                setContractInfo({
+                    version: BigInt(contract.version.toString()),
+                    token: contract.token,
+                    signer: contract.signer,
+                    totalRewards: BigInt(contract.totalRewards.toString()),
+                });
+            } else {
+                // Fallback to on-chain call
+                const info = await getRewardsContractInfo(provider);
+                setContractInfo(info);
+            }
         } catch (err) {
             console.error('Error fetching contract info:', err);
+            // Fallback to on-chain call if API fails
+            if (provider) {
+                try {
+                    const info = await getRewardsContractInfo(provider);
+                    setContractInfo(info);
+                } catch (fallbackErr) {
+                    console.error('Error fetching contract info from chain:', fallbackErr);
+                }
+            }
         }
     }, [provider]);
 
@@ -207,14 +238,13 @@ export function useRewards(): UseRewardsReturn {
      */
     const getRewardTable = useCallback(async (): Promise<Record<string, string>> => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/rewards/table`);
-            const data = await response.json();
+            const result = await getRewardTableApi();
 
-            if (!response.ok || !data.success) {
-                throw new Error(data.error || 'Failed to fetch reward table');
+            if (!result.success || !result.data?.rewardTable) {
+                throw new Error(result.error || 'Failed to fetch reward table');
             }
 
-            return data.data.rewardTable as Record<string, string>;
+            return result.data.rewardTable;
         } catch (err: any) {
             console.error('Error fetching reward table:', err);
             return {};

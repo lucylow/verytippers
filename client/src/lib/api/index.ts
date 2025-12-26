@@ -10,6 +10,10 @@ export type { RequestConfig, ApiResponse } from './client';
 export * from './tips';
 export * from './analytics';
 export * from './badges';
+export * from './rewards';
+export * from './checkout';
+export * from './ads';
+export * from './moderation';
 
 // Export types
 export * from './types';

@@ -2,6 +2,7 @@
 import express, { Request, Response } from 'express';
 import Stripe from 'stripe';
 import { getSupabaseClient } from '../lib/supabase';
+import { config } from '../config';
 
 const router = express.Router();
 

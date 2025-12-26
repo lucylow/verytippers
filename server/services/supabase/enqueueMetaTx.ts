@@ -19,7 +19,7 @@ export async function enqueueMetaTx(tipId: string, metaPayload: any) {
       payload: metaPayload,
       status: 'queued',
       priority: metaPayload.priority || 100
-    })
+    } as any)
     .select()
     .single();
 
@@ -33,8 +33,8 @@ export async function enqueueMetaTx(tipId: string, metaPayload: any) {
     tip_id: tipId,
     action: 'enqueue_meta_tx',
     actor: 'orchestrator',
-    detail: { queue_id: data.id, priority: data.priority }
-  });
+    detail: { queue_id: (data as any)?.id, priority: (data as any)?.priority }
+  } as any);
 
   return data;
 }
@@ -48,11 +48,12 @@ export async function updateMetaTxStatus(
   error?: string
 ) {
 
-  const updateData: any = { status };
+  const updateData: Record<string, any> = { status };
   if (error) {
     updateData.payload = { ...updateData.payload, error };
   }
 
+  // @ts-ignore - Supabase types don't properly infer table schema
   const { data, error: updateError } = await supabase
     .from('meta_tx_queue')
     .update(updateData)

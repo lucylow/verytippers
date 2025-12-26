@@ -31,9 +31,9 @@ export default function CheckoutModal({ userId, onClose, onSuccess }: CheckoutMo
 
   async function fetchBalance() {
     try {
-      const response = await fetch(`/api/checkout/balance/${userId}`);
-      const data = await response.json();
-      setBalance(data.credits || 0);
+      const { getUserBalance } = await import('@/lib/api');
+      const result = await getUserBalance(userId);
+      setBalance(result.credits || 0);
     } catch (error) {
       console.error("Error fetching balance:", error);
     }
@@ -47,26 +47,21 @@ export default function CheckoutModal({ userId, onClose, onSuccess }: CheckoutMo
 
     setLoading(true);
     try {
-      const res = await fetch("/api/checkout/stripe-create-session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId,
-          credits,
-          success_url: `${window.location.origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-          cancel_url: `${window.location.origin}/checkout/cancel`
-        })
+      const { createCheckoutSession } = await import('@/lib/api');
+      const result = await createCheckoutSession({
+        userId,
+        credits,
+        success_url: `${window.location.origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${window.location.origin}/checkout/cancel`
       });
-
-      const data = await res.json();
       
-      if (data.url) {
+      if (result.url) {
         const stripe = await stripePromise;
         if (stripe) {
-          window.location.href = data.url;
+          window.location.href = result.url;
         }
       } else {
-        toast.error("Failed to create checkout session");
+        toast.error(result.error || "Failed to create checkout session");
       }
     } catch (error: any) {
       console.error("Error creating checkout session:", error);
@@ -106,28 +101,23 @@ export default function CheckoutModal({ userId, onClose, onSuccess }: CheckoutMo
       const signature = await signer.signMessage(ethers.getBytes(messageHash));
 
       // Send signed payload to orchestrator endpoint to create meta-tx
-      const res = await fetch("/api/checkout/create-meta-tx", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId,
-          toAddress,
-          amount,
-          cid: messageCid || null,
-          nonce: payload.nonce,
-          signature,
-          fromAddress
-        })
+      const { createMetaTx } = await import('@/lib/api');
+      const result = await createMetaTx({
+        userId,
+        toAddress,
+        amount,
+        cid: messageCid || null,
+        nonceHint: payload.nonce,
+        signature,
+        fromAddress
       });
-
-      const json = await res.json();
       
-      if (json.queuedId) {
+      if (result.queuedId) {
         toast.success("Tip queued for relayer — you'll be notified when confirmed");
         await fetchBalance(); // Refresh balance
         onSuccess?.();
       } else {
-        toast.error("Error: " + (json.error || JSON.stringify(json)));
+        toast.error("Error: " + (result.error || "Failed to create meta-transaction"));
       }
     } catch (error: any) {
       console.error("Error in gasless tip:", error);
