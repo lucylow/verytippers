@@ -331,11 +331,11 @@ class ApiClient {
         return await retryOperation(
           requestOperation,
           {
-            maxAttempts: retryAttempts,
-            baseDelay: retryDelay,
+            maxRetries: retryAttempts - 1, // retryOperation uses maxRetries (0-based attempts)
+            retryDelay: retryDelay,
             maxDelay: 10000,
             backoffMultiplier: 2,
-            shouldRetry: (error) => {
+            retryable: (error: unknown): boolean => {
               if (error instanceof ApiError && error.statusCode) {
                 return retryableStatusCodes.includes(error.statusCode);
               }
@@ -432,7 +432,6 @@ export const apiClient = new ApiClient(API_BASE_URL);
 if (import.meta.env.DEV) {
   apiClient.addRequestInterceptor((config) => {
     console.log('[API Request]', {
-      url: config.url || 'unknown',
       method: config.method || 'GET',
       headers: config.headers,
     });

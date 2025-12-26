@@ -5,17 +5,7 @@ import { motion } from 'framer-motion';
 import { Card, CardContent } from '@/components/ui/card';
 import { Crown, Award, RefreshCw } from 'lucide-react';
 import { useVeryTippers } from '@/hooks/useVeryTippers';
-
-export interface Badge {
-  id: string;
-  badgeId: string;
-  name: string;
-  emoji: string;
-  rarity: 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond';
-  description: string;
-  awardedAt: string;
-  metadata?: any;
-}
+import type { Badge } from '@/lib/api/types';
 
 interface BadgeDisplayProps {
   userId?: string;
@@ -49,8 +39,36 @@ export function BadgeDisplay({ userId: propUserId, className }: BadgeDisplayProp
       const result = await getUserBadges(userId);
       
       if (result.success && result.data) {
-        setBadges(result.data.badges || []);
-        setStats(result.data.stats || null);
+        // Normalize badges: convert awardedAt Date to string if needed
+        const normalizedBadges = (result.data.badges || []).map(badge => ({
+          ...badge,
+          awardedAt: typeof badge.awardedAt === 'string' 
+            ? badge.awardedAt 
+            : badge.awardedAt instanceof Date 
+            ? badge.awardedAt.toISOString()
+            : new Date(badge.awardedAt).toISOString(),
+        }));
+        setBadges(normalizedBadges);
+        
+        // Normalize stats
+        if (result.data.stats) {
+          const normalizedStats = {
+            ...result.data.stats,
+            latestBadge: result.data.stats.latestBadge 
+              ? {
+                  ...result.data.stats.latestBadge,
+                  awardedAt: typeof result.data.stats.latestBadge.awardedAt === 'string'
+                    ? result.data.stats.latestBadge.awardedAt
+                    : result.data.stats.latestBadge.awardedAt instanceof Date
+                    ? result.data.stats.latestBadge.awardedAt.toISOString()
+                    : new Date(result.data.stats.latestBadge.awardedAt).toISOString(),
+                }
+              : null,
+          };
+          setStats(normalizedStats);
+        } else {
+          setStats(null);
+        }
       }
     } catch (error) {
       console.error('Error fetching badges:', error);

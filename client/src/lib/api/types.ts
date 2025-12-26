@@ -59,11 +59,18 @@ export interface TipRecommendationResponse {
   success: boolean;
   data?: {
     amount: number;
+    recommendedAmount?: string;
     message?: string;
     confidence?: number;
     reason?: string;
+    reasoning?: string;
     sentiment?: 'low' | 'medium' | 'high';
     category?: string;
+    contentScore?: {
+      quality: number;
+      engagement: number;
+      sentiment: string;
+    };
   };
   error?: string;
 }
@@ -79,6 +86,7 @@ export interface MessageSuggestion {
   message: string;
   tone: 'friendly' | 'professional' | 'casual' | 'enthusiastic';
   confidence?: number;
+  score?: number;
 }
 
 export interface MessageSuggestionsResponse {

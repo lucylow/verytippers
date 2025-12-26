@@ -45,7 +45,14 @@ export function TipRecommendation({
       });
 
       if (result.success && result.data) {
-        setRecommendation(result.data as Recommendation);
+        // Map API response to component's Recommendation type
+        const data = result.data;
+        setRecommendation({
+          recommendedAmount: data.recommendedAmount || String(data.amount || '0'),
+          confidence: data.confidence || 0,
+          reasoning: data.reasoning || data.reason || 'Based on content analysis',
+          contentScore: data.contentScore,
+        });
       }
     } catch (error) {
       console.error("Error fetching recommendation:", error);

@@ -439,6 +439,11 @@ function Router() {
           <Verychain />
         </RouteErrorBoundary>
       </Route>
+      <Route path="/admin/ads">
+        <RouteErrorBoundary route="/admin/ads">
+          <AdsEditor />
+        </RouteErrorBoundary>
+      </Route>
       <Route path="/404">
         <RouteErrorBoundary route="/404">
           <NotFound />

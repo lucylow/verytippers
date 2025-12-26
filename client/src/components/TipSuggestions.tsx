@@ -42,17 +42,26 @@ export function TipSuggestions({
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
   const fetchSuggestions = async () => {
+    if (!recipientName && !contentPreview) {
+      return;
+    }
+    
     setLoading(true);
     try {
       const { getMessageSuggestions } = await import('@/lib/api');
       const result = await getMessageSuggestions({
-        recipientName,
+        recipientName: recipientName || '',
         contentPreview,
         tipAmount,
       });
 
       if (result.success && result.data) {
-        setSuggestions(result.data);
+        // Map API response to component's MessageSuggestion type (add score if missing)
+        const mappedSuggestions = result.data.map(suggestion => ({
+          ...suggestion,
+          score: suggestion.score ?? suggestion.confidence ?? 0.8,
+        }));
+        setSuggestions(mappedSuggestions);
       } else {
         const errorMsg = result.error || "Failed to load suggestions";
         toast.error(errorMsg);
