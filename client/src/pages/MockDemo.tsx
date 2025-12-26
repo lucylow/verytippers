@@ -113,8 +113,26 @@ export default function MockDemo() {
   }
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-background text-foreground">
+      <ErrorBoundary
+        fallback={
+          <div className="min-h-screen flex items-center justify-center">
+            <div className="text-center">
+              <h1 className="text-2xl font-bold mb-2">Failed to load navigation</h1>
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90"
+              >
+                Reload Page
+              </button>
+            </div>
+          </div>
+        }
+      >
+        <Navbar />
+      </ErrorBoundary>
+      <main className="container mx-auto px-4 py-12 max-w-7xl">
+        <div className="space-y-6">
         {/* Header */}
         <div className="text-center space-y-2">
           <h1 className="text-4xl font-bold">VeryTippers — Demo UI</h1>
@@ -268,7 +286,17 @@ export default function MockDemo() {
             </Card>
           </div>
         </div>
-      </div>
+        </div>
+      </main>
+      <ErrorBoundary
+        fallback={
+          <div className="py-4 px-4 text-center text-sm text-muted-foreground">
+            Footer unavailable
+          </div>
+        }
+      >
+        <Footer />
+      </ErrorBoundary>
 
       {/* Wallet Modal */}
       <WalletModal

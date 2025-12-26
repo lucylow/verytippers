@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
+import { Navbar } from '@/components/Navbar';
+import { Footer } from '@/components/Footer';
 import PeerPanel from '@/components/PeerPanel';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 export default function P2PDemo() {
   const [roomId, setRoomId] = useState(() => {
@@ -16,7 +19,26 @@ export default function P2PDemo() {
   const [toAddress, setToAddress] = useState('');
 
   return (
-    <div className="container mx-auto p-4 space-y-6">
+    <div className="min-h-screen bg-background text-foreground">
+      <ErrorBoundary
+        fallback={
+          <div className="min-h-screen flex items-center justify-center">
+            <div className="text-center">
+              <h1 className="text-2xl font-bold mb-2">Failed to load navigation</h1>
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90"
+              >
+                Reload Page
+              </button>
+            </div>
+          </div>
+        }
+      >
+        <Navbar />
+      </ErrorBoundary>
+      <main className="container mx-auto px-4 py-12 max-w-7xl">
+        <div className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>Peer-to-Peer Tipping Demo</CardTitle>
@@ -101,6 +123,17 @@ export default function P2PDemo() {
           </div>
         </CardContent>
       </Card>
+        </div>
+      </main>
+      <ErrorBoundary
+        fallback={
+          <div className="py-4 px-4 text-center text-sm text-muted-foreground">
+            Footer unavailable
+          </div>
+        }
+      >
+        <Footer />
+      </ErrorBoundary>
     </div>
   );
 }
