@@ -20,6 +20,8 @@ const MARKETPLACE_ABI = [
     "function cancelListing(uint256 listingId) external",
     "function buy(uint256 listingId) external payable",
     "function getListing(uint256 listingId) view returns (tuple(address seller, address nftContract, uint256 tokenId, uint256 price, bool active))",
+    "function feeRecipient() view returns (address)",
+    "function platformFeeBps() view returns (uint256)",
     "event Listed(uint256 indexed listingId, address indexed seller, address indexed nftContract, uint256 tokenId, uint256 price)",
     "event Cancelled(uint256 indexed listingId)",
     "event Purchased(uint256 indexed listingId, address indexed buyer, uint256 price)"
@@ -351,6 +353,24 @@ export class NFTService {
         });
 
         return nfts;
+    }
+
+    /**
+     * Get platform fee recipient address
+     */
+    async getFeeRecipient(): Promise<string> {
+        if (!this.marketplaceContract) {
+            throw new Error('Marketplace contract not configured');
+        }
+
+        try {
+            const feeRecipient = await this.marketplaceContract.feeRecipient();
+            return feeRecipient;
+        } catch (error: any) {
+            console.error('Error fetching fee recipient:', error);
+            // Return a default address if contract call fails
+            return this.relayerWallet.address;
+        }
     }
 }
 

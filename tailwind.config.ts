@@ -13,6 +13,10 @@ export default {
       },
     },
     extend: {
+      spacing: {
+        'safe-top': 'env(safe-area-inset-top)',
+        'safe-bottom': 'env(safe-area-inset-bottom)',
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -63,6 +67,11 @@ export default {
         sans: ['Inter', 'system-ui', 'sans-serif'],
         mono: ['JetBrains Mono', 'monospace'],
       },
+      fontSize: {
+        'ui-sm': ['14px', '20px'],
+        'ui-md': ['16px', '22px'],
+        'ui-lg': ['18px', '26px'],
+      },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
@@ -86,6 +95,14 @@ export default {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
         'gradient-primary': 'linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 100%)',
       },
+    },
+    screens: {
+      'xs': '360px',   // small phones
+      'sm': '640px',   // normal phones
+      'md': '768px',   // tablets
+      'lg': '1024px',
+      'xl': '1280px',
+      '2xl': '1400px',
     },
   },
   plugins: [require("tailwindcss-animate")],

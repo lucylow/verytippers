@@ -17,6 +17,7 @@ import CheckoutSuccess from "./pages/CheckoutSuccess";
 import CheckoutCancel from "./pages/CheckoutCancel";
 import { VoiceTippingButton } from "./components/VoiceTippingButton";
 import { NetworkSelector } from "./components/NetworkSelector";
+import MobileShell from "./components/MobileShell";
 
 // Import improved error handling utilities
 import { categorizeError, type CategorizedError } from "@/lib/errors/errorTypes";
@@ -228,11 +229,13 @@ function App() {
           <WalletProvider>
             <TooltipProvider>
               <Toaster />
-              <div className="fixed top-4 right-4 z-50">
-                <NetworkSelector />
-              </div>
-              <Router />
-              <VoiceTippingButton />
+              <MobileShell>
+                <div className="fixed top-4 right-4 z-50">
+                  <NetworkSelector />
+                </div>
+                <Router />
+                <VoiceTippingButton />
+              </MobileShell>
             </TooltipProvider>
           </WalletProvider>
         </NetworkProvider>

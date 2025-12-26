@@ -16,6 +16,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import { canSubmitTip } from './fairness-check.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -199,6 +200,34 @@ async function processOne(): Promise<void> {
     const amount = ethers.parseUnits(String(row.amount || 0), 18);
     const cidHash = row.cid ? ethers.id(row.cid) : ethers.ZeroHash; // Convert CID string to bytes32
     const nonce = BigInt(row.nonce || 0);
+
+    // Pre-check fairness rules (saves gas on failed submissions)
+    // Note: This only works if TipRouterFair is deployed. For TipRouter, skip this check.
+    if (tipRouterAddress) {
+      try {
+        const fairnessCheck = await canSubmitTip(provider, tipRouterAddress, fromAddress, toAddress, amount);
+        if (!fairnessCheck.ok) {
+          console.warn(`⚠️  Tip rejected by fairness check: ${fairnessCheck.reason}`, fairnessCheck.details);
+          await supabase
+            .from('meta_tx_queue')
+            .update({ 
+              status: 'failed',
+              payload: { 
+                ...row?.payload, 
+                error: `Fairness check failed: ${fairnessCheck.reason}`,
+                fairnessDetails: fairnessCheck.details
+              }
+            })
+            .eq('id', queueId);
+          return;
+        }
+        console.log('✅ Fairness check passed');
+      } catch (fairnessErr) {
+        // If fairness check fails (e.g., contract not TipRouterFair), continue anyway
+        // The on-chain contract will enforce its own rules
+        console.warn('⚠️  Fairness check error (non-critical, continuing):', fairnessErr);
+      }
+    }
 
     const messageHash = ethers.keccak256(
       ethers.solidityPacked(
