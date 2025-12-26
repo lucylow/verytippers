@@ -449,7 +449,8 @@ var AIService = class {
       return;
     }
     try {
-      const OpenAI = (await import("openai")).default;
+      const openaiModule = await import("openai");
+      const OpenAI = openaiModule.default || openaiModule;
       this.openai = new OpenAI({ apiKey: config2.OPENAI_API_KEY });
       this.openaiAvailable = true;
       console.log("OpenAI initialized successfully");
@@ -475,7 +476,7 @@ var AIService = class {
       if (this.openaiAvailable && this.openai) {
         const prompt = this.buildTipSuggestionPrompt(chatContext, context);
         const completion = await this.openai.chat.completions.create({
-          model: config2.OPENAI_MODEL || "gpt-3.5-turbo",
+          model: config2.OPENAI_MODEL || "gpt-4o-mini",
           messages: [
             {
               role: "system",
@@ -621,7 +622,7 @@ Return a JSON object with this exact structure:
       if (this.openaiAvailable && this.openai) {
         const prompt = this.buildLeaderboardInsightPrompt(userId, analytics);
         const completion = await this.openai.chat.completions.create({
-          model: config2.OPENAI_MODEL || "gpt-3.5-turbo",
+          model: config2.OPENAI_MODEL || "gpt-4o-mini",
           messages: [
             {
               role: "system",
@@ -944,7 +945,7 @@ var IpfsService = class {
       let FormData;
       try {
         const formDataModule = await import("form-data");
-        FormData = formDataModule.default || formDataModule.FormData;
+        FormData = formDataModule.default || formDataModule;
       } catch {
         throw new Error("form-data package not installed. Install it with: npm install form-data");
       }
@@ -1355,6 +1356,451 @@ var TipAnalyticsService = class {
   }
 };
 
+// server/services/BadgeEngine.ts
+import { HfInference as HfInference2 } from "@huggingface/inference";
+import { z } from "zod";
+var BadgeSchema = z.object({
+  id: z.string(),
+  badgeId: z.string(),
+  name: z.string(),
+  emoji: z.string(),
+  rarity: z.enum(["bronze", "silver", "gold", "platinum", "diamond"]),
+  description: z.string(),
+  criteria: z.object({
+    type: z.enum(["milestone", "streak", "pattern", "support", "volume"]),
+    threshold: z.number(),
+    period: z.enum(["daily", "weekly", "monthly", "all-time"])
+  }),
+  awardedAt: z.string().datetime().optional(),
+  isActive: z.boolean().optional()
+});
+var BADGE_CATEGORIES = {
+  milestones: [
+    { badgeId: "first-tip", name: "First Tip", emoji: "\u{1F389}", rarity: "bronze", criteria: { type: "milestone", threshold: 1, period: "all-time" }, description: "Sent your first tip!" },
+    { badgeId: "tip-10", name: "Tip Master", emoji: "\u{1F947}", rarity: "silver", criteria: { type: "milestone", threshold: 10, period: "all-time" }, description: "Sent 10 tips" },
+    { badgeId: "tip-50", name: "Tip Veteran", emoji: "\u2B50", rarity: "gold", criteria: { type: "milestone", threshold: 50, period: "all-time" }, description: "Sent 50 tips" },
+    { badgeId: "tip-100", name: "Tipping Legend", emoji: "\u{1F3C6}", rarity: "gold", criteria: { type: "milestone", threshold: 100, period: "all-time" }, description: "Sent 100 tips" },
+    { badgeId: "tip-1000", name: "Whale Tipper", emoji: "\u{1F40B}", rarity: "diamond", criteria: { type: "milestone", threshold: 1e3, period: "all-time" }, description: "Sent 1000 tips" }
+  ],
+  streaks: [
+    { badgeId: "daily-streak-7", name: "Week Streaker", emoji: "\u{1F525}", rarity: "bronze", criteria: { type: "streak", threshold: 7, period: "daily" }, description: "7 day tipping streak" },
+    { badgeId: "daily-streak-30", name: "Month Master", emoji: "\u{1F4C5}", rarity: "silver", criteria: { type: "streak", threshold: 30, period: "daily" }, description: "30 day tipping streak" },
+    { badgeId: "daily-streak-100", name: "Century Streak", emoji: "\u{1F4AF}", rarity: "gold", criteria: { type: "streak", threshold: 100, period: "daily" }, description: "100 day tipping streak" }
+  ],
+  patterns: [
+    { badgeId: "micro-tipper", name: "Micro Master", emoji: "\u{1F48E}", rarity: "silver", criteria: { type: "pattern", threshold: 50, period: "monthly" }, description: "50+ micro tips in a month" },
+    { badgeId: "generous", name: "Big Spender", emoji: "\u{1F4B0}", rarity: "gold", criteria: { type: "pattern", threshold: 100, period: "monthly" }, description: "100+ VERY in tips per month" },
+    { badgeId: "early-bird", name: "Early Bird", emoji: "\u{1F305}", rarity: "bronze", criteria: { type: "pattern", threshold: 10, period: "monthly" }, description: "Tips before 9AM" },
+    { badgeId: "night-owl", name: "Night Owl", emoji: "\u{1F989}", rarity: "bronze", criteria: { type: "pattern", threshold: 10, period: "monthly" }, description: "Tips after 11PM" }
+  ],
+  support: [
+    { badgeId: "top-supporter", name: "Creator Angel", emoji: "\u{1F607}", rarity: "gold", criteria: { type: "support", threshold: 25, period: "monthly" }, description: "Top 1% supporter of a creator" },
+    { badgeId: "consistent", name: "Loyal Fan", emoji: "\u2764\uFE0F", rarity: "silver", criteria: { type: "support", threshold: 10, period: "monthly" }, description: "10+ tips to the same creator" },
+    { badgeId: "community-builder", name: "Community Builder", emoji: "\u{1F465}", rarity: "gold", criteria: { type: "support", threshold: 50, period: "all-time" }, description: "Supported 50+ different creators" }
+  ]
+};
+var BADGE_RARITY_ORDER = {
+  bronze: 1,
+  silver: 2,
+  gold: 3,
+  platinum: 4,
+  diamond: 5
+};
+var BadgeEngine = class {
+  // 5 minutes
+  constructor() {
+    this.db = DatabaseService.getInstance();
+    this.hf = null;
+    this.userStatsCache = /* @__PURE__ */ new Map();
+    this.CACHE_TTL = 5 * 60 * 1e3;
+    if (config2.HUGGINGFACE_API_KEY && config2.HUGGINGFACE_API_KEY !== "dummy_hf_key") {
+      this.hf = new HfInference2(config2.HUGGINGFACE_API_KEY);
+    }
+  }
+  /**
+   * Check all achievements for a user based on their tips
+   */
+  async checkAllAchievements(userId, tips) {
+    const stats = await this.calculateStats(userId, tips);
+    const badges = [];
+    for (const category of Object.values(BADGE_CATEGORIES)) {
+      for (const badgeDef of category) {
+        if (this.meetsCriteria(stats, badgeDef.criteria, tips)) {
+          badges.push({
+            id: badgeDef.badgeId,
+            badgeId: badgeDef.badgeId,
+            name: badgeDef.name,
+            emoji: badgeDef.emoji,
+            rarity: badgeDef.rarity,
+            description: badgeDef.description,
+            criteria: badgeDef.criteria,
+            isActive: true
+          });
+        }
+      }
+    }
+    if (this.hf) {
+      try {
+        const aiBadges = await this.generateAIBadges(stats, tips);
+        badges.push(...aiBadges);
+      } catch (error) {
+        console.error("AI badge generation failed:", error);
+      }
+    }
+    return badges.sort((a, b) => (BADGE_RARITY_ORDER[b.rarity] || 0) - (BADGE_RARITY_ORDER[a.rarity] || 0));
+  }
+  /**
+   * Calculate comprehensive user statistics
+   */
+  async calculateStats(userId, tips) {
+    const cached = this.userStatsCache.get(userId);
+    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
+      return cached.stats;
+    }
+    const filteredTips = tips.filter((t) => t.senderId === userId);
+    let totalAmount = BigInt(0);
+    const recipientMap = /* @__PURE__ */ new Map();
+    let microTips = 0;
+    let earlyTips = 0;
+    let lateTips = 0;
+    for (const tip of filteredTips) {
+      const amount = BigInt(tip.amount);
+      totalAmount += amount;
+      if (amount < BigInt("1000000000000000000")) {
+        microTips++;
+      }
+      const recipientData = recipientMap.get(tip.recipientId) || { tips: 0, amount: BigInt(0) };
+      recipientData.tips++;
+      recipientData.amount += amount;
+      recipientMap.set(tip.recipientId, recipientData);
+      const hour = new Date(tip.createdAt).getHours();
+      if (hour < 9) earlyTips++;
+      if (hour >= 23 || hour < 3) lateTips++;
+    }
+    const topRecipients = Array.from(recipientMap.entries()).map(([username, data]) => ({ username, tips: data.tips, amount: data.amount })).sort((a, b) => b.tips - a.tips).slice(0, 5);
+    const thirtyDaysAgo = /* @__PURE__ */ new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const monthlyTips = filteredTips.filter((t) => new Date(t.createdAt) >= thirtyDaysAgo);
+    const monthlyVolume = monthlyTips.reduce((sum, tip) => sum + BigInt(tip.amount), BigInt(0));
+    const monthlyRecipients = /* @__PURE__ */ new Map();
+    monthlyTips.forEach((tip) => {
+      monthlyRecipients.set(tip.recipientId, (monthlyRecipients.get(tip.recipientId) || 0) + 1);
+    });
+    const supportConsistency = Math.max(...Array.from(monthlyRecipients.values()), 0);
+    const stats = {
+      totalTips: filteredTips.length,
+      totalAmount,
+      dailyStreak: this.calculateStreak(filteredTips),
+      topRecipients,
+      microTips,
+      avgTipSize: filteredTips.length > 0 ? totalAmount / BigInt(filteredTips.length) : BigInt(0),
+      monthlyVolume,
+      supportConsistency,
+      earlyTips,
+      lateTips
+    };
+    this.userStatsCache.set(userId, { stats, timestamp: Date.now() });
+    return stats;
+  }
+  /**
+   * Check if user meets badge criteria
+   */
+  meetsCriteria(stats, criteria, tips) {
+    switch (criteria.type) {
+      case "milestone":
+        return stats.totalTips >= criteria.threshold;
+      case "streak":
+        return stats.dailyStreak >= criteria.threshold;
+      case "pattern":
+        return this.checkPattern(stats, criteria, tips);
+      case "support":
+        if (criteria.threshold === 25) {
+          return stats.topRecipients.some((r) => r.tips >= criteria.threshold);
+        }
+        return stats.supportConsistency >= criteria.threshold;
+      case "volume":
+        const thresholdAmount = BigInt(criteria.threshold) * BigInt("1000000000000000000");
+        if (criteria.period === "monthly") {
+          return stats.monthlyVolume >= thresholdAmount;
+        }
+        return stats.totalAmount >= thresholdAmount;
+      default:
+        return false;
+    }
+  }
+  /**
+   * Check pattern-based badges
+   */
+  checkPattern(stats, criteria, tips) {
+    if (criteria.type === "pattern") {
+      if (criteria.threshold === 50 && stats.microTips >= 50) {
+        return true;
+      }
+      const monthlyThreshold = BigInt(100) * BigInt("1000000000000000000");
+      if (criteria.threshold === 100 && stats.monthlyVolume >= monthlyThreshold) {
+        return true;
+      }
+      if (criteria.threshold === 10 && stats.earlyTips >= 10) {
+        return true;
+      }
+      if (criteria.threshold === 10 && stats.lateTips >= 10) {
+        return true;
+      }
+    }
+    return false;
+  }
+  /**
+   * Generate AI-powered dynamic badges using Hugging Face
+   */
+  async generateAIBadges(stats, tips) {
+    if (!this.hf) return [];
+    try {
+      const recentTips = tips.slice(0, 20).map((t) => ({
+        amount: t.amount,
+        hour: new Date(t.createdAt).getHours(),
+        day: new Date(t.createdAt).getDay()
+      }));
+      const weekendTips = recentTips.filter((t) => t.day === 0 || t.day === 6).length;
+      if (weekendTips >= 5 && stats.totalTips >= 10) {
+        return [{
+          id: "weekend-warrior",
+          badgeId: "weekend-warrior",
+          name: "Weekend Warrior",
+          emoji: "\u{1F3AF}",
+          rarity: "silver",
+          description: "Most tips on weekends",
+          criteria: { type: "pattern", threshold: 5, period: "all-time" },
+          isActive: true
+        }];
+      }
+      const roundAmounts = recentTips.filter((t) => {
+        const amount = BigInt(t.amount);
+        return amount % BigInt("1000000000000000000") === BigInt(0);
+      }).length;
+      if (roundAmounts >= 5 && stats.totalTips >= 10) {
+        return [{
+          id: "round-numberer",
+          badgeId: "round-numberer",
+          name: "Round Numberer",
+          emoji: "\u{1F3B2}",
+          rarity: "bronze",
+          description: "Prefers round tip amounts",
+          criteria: { type: "pattern", threshold: 5, period: "all-time" },
+          isActive: true
+        }];
+      }
+      return [];
+    } catch (error) {
+      console.error("AI badge generation error:", error);
+      return [];
+    }
+  }
+  /**
+   * Calculate daily tipping streak
+   */
+  calculateStreak(tips) {
+    if (tips.length === 0) return 0;
+    const sortedTips = [...tips].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+    let streak = 0;
+    const today = /* @__PURE__ */ new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayTip = sortedTips.find((t) => {
+      const tipDate = new Date(t.createdAt);
+      tipDate.setHours(0, 0, 0, 0);
+      return tipDate.getTime() === today.getTime();
+    });
+    if (!todayTip) return 0;
+    let currentDate = new Date(today);
+    let tipIndex = 0;
+    while (tipIndex < sortedTips.length) {
+      const tipDate = new Date(sortedTips[tipIndex].createdAt);
+      tipDate.setHours(0, 0, 0, 0);
+      const currentDateStr = currentDate.getTime();
+      if (tipDate.getTime() === currentDateStr) {
+        streak++;
+        tipIndex++;
+        currentDate.setDate(currentDate.getDate() - 1);
+      } else if (tipDate.getTime() < currentDateStr) {
+        break;
+      } else {
+        tipIndex++;
+      }
+    }
+    return streak;
+  }
+};
+
+// server/services/BadgeService.ts
+var BadgeService = class {
+  constructor() {
+    this.db = DatabaseService.getInstance();
+    this.badgeEngine = new BadgeEngine();
+    this.analyticsService = new TipAnalyticsService();
+  }
+  /**
+   * Check and award badges for a user
+   * Returns newly awarded badges
+   */
+  async checkAndAwardBadges(userId) {
+    const tips = await this.db.tip.findMany({
+      where: {
+        senderId: userId,
+        status: "COMPLETED"
+      },
+      orderBy: {
+        createdAt: "desc"
+      }
+    });
+    const existingBadges = await this.db.userBadge.findMany({
+      where: {
+        userId,
+        revokedAt: null
+      },
+      include: {
+        badge: true
+      }
+    });
+    const existingBadgeIds = new Set(existingBadges.map((ub) => ub.badge.badgeId));
+    const qualifiedBadges = await this.badgeEngine.checkAllAchievements(userId, tips);
+    const newBadges = qualifiedBadges.filter((b) => !existingBadgeIds.has(b.badgeId));
+    const awardedBadges = [];
+    for (const badge of newBadges) {
+      try {
+        await this.ensureBadgeExists(badge);
+        await this.db.userBadge.create({
+          data: {
+            userId,
+            badgeId: badge.badgeId,
+            metadata: {
+              criteria: badge.criteria,
+              awardedAt: (/* @__PURE__ */ new Date()).toISOString()
+            }
+          }
+        });
+        awardedBadges.push(badge);
+      } catch (error) {
+        if (!error.message?.includes("Unique constraint") && error.code !== "P2002") {
+          console.error(`Error awarding badge ${badge.badgeId} to user ${userId}:`, error);
+        }
+      }
+    }
+    return awardedBadges;
+  }
+  /**
+   * Ensure a badge definition exists in the database
+   */
+  async ensureBadgeExists(badge) {
+    const existing = await this.db.badge.findUnique({
+      where: { badgeId: badge.badgeId }
+    });
+    if (!existing) {
+      await this.db.badge.create({
+        data: {
+          badgeId: badge.badgeId,
+          name: badge.name,
+          emoji: badge.emoji,
+          description: badge.description,
+          rarity: badge.rarity,
+          criteria: badge.criteria,
+          isActive: badge.isActive ?? true
+        }
+      });
+    }
+  }
+  /**
+   * Get all badges for a user
+   */
+  async getUserBadges(userId) {
+    const userBadges = await this.db.userBadge.findMany({
+      where: {
+        userId,
+        revokedAt: null
+      },
+      include: {
+        badge: true
+      },
+      orderBy: {
+        awardedAt: "desc"
+      }
+    });
+    return userBadges.map((ub) => ({
+      id: ub.id,
+      badgeId: ub.badge.badgeId,
+      name: ub.badge.name,
+      emoji: ub.badge.emoji,
+      rarity: ub.badge.rarity,
+      description: ub.badge.description,
+      awardedAt: ub.awardedAt,
+      metadata: ub.metadata
+    }));
+  }
+  /**
+   * Get badge details by badgeId
+   */
+  async getBadge(badgeId) {
+    return await this.db.badge.findUnique({
+      where: { badgeId }
+    });
+  }
+  /**
+   * Get all available badges (definitions)
+   */
+  async getAllBadges() {
+    return await this.db.badge.findMany({
+      where: {
+        isActive: true
+      },
+      orderBy: {
+        rarity: "asc"
+      }
+    });
+  }
+  /**
+   * Revoke a badge from a user
+   */
+  async revokeBadge(userId, badgeId) {
+    try {
+      await this.db.userBadge.updateMany({
+        where: {
+          userId,
+          badgeId,
+          revokedAt: null
+        },
+        data: {
+          revokedAt: /* @__PURE__ */ new Date()
+        }
+      });
+      return true;
+    } catch (error) {
+      console.error(`Error revoking badge ${badgeId} from user ${userId}:`, error);
+      return false;
+    }
+  }
+  /**
+   * Get badge statistics for a user
+   */
+  async getUserBadgeStats(userId) {
+    const badges = await this.getUserBadges(userId);
+    const rarityCounts = {
+      bronze: 0,
+      silver: 0,
+      gold: 0,
+      platinum: 0,
+      diamond: 0
+    };
+    badges.forEach((b) => {
+      rarityCounts[b.rarity] = (rarityCounts[b.rarity] || 0) + 1;
+    });
+    return {
+      totalBadges: badges.length,
+      rarityCounts,
+      latestBadge: badges[0] || null
+    };
+  }
+};
+
 // server/services/TipService.ts
 import { ethers as ethers2 } from "ethers";
 var TipService = class {
@@ -1366,6 +1812,7 @@ var TipService = class {
     this.verychatService = new VerychatService();
     this.ipfsService = new IpfsService();
     this.analyticsService = new TipAnalyticsService();
+    this.badgeService = new BadgeService();
     this.queueService = new QueueService(this.processQueueJob.bind(this));
     this.blockchainService.listenToEvents(this.handleBlockchainEvent.bind(this));
   }
@@ -1420,32 +1867,44 @@ var TipService = class {
   }
   /**
    * Get AI-powered tip recommendation based on content
+   * Enhanced version that can use OpenAI for intelligent suggestions
    */
   async getTipRecommendation(content, context) {
     try {
-      const contentScore = await this.hfService.scoreContent(content, context);
-      const recommendedAmount = contentScore.recommendedTipAmount || 5;
-      const quality = contentScore.quality;
-      const engagement = contentScore.engagement;
-      const sentiment = contentScore.sentiment.label;
-      const scoreVariance = Math.abs(quality - engagement) / 100;
-      const confidence = Math.max(0.5, 1 - scoreVariance);
-      let reasoning = `Based on content analysis: Quality score ${quality}/100, Engagement score ${engagement}/100, Sentiment: ${sentiment}.`;
-      if (quality >= 80) {
-        reasoning += " High-quality content deserves generous tipping.";
-      } else if (quality >= 60) {
-        reasoning += " Good content with room for improvement.";
-      } else {
-        reasoning += " Content could benefit from more detail and engagement.";
+      let relationship;
+      let previousTips = 0;
+      if (context?.senderId && context?.recipientId) {
+        try {
+          const tipHistory = await this.db.tip.count({
+            where: {
+              senderId: context.senderId,
+              recipientId: context.recipientId,
+              status: "COMPLETED"
+            }
+          });
+          previousTips = tipHistory;
+          if (tipHistory > 5) relationship = "regular";
+          else if (tipHistory > 0) relationship = "friend";
+          else relationship = "stranger";
+        } catch (error) {
+        }
       }
+      const suggestion = await this.aiService.generateTipSuggestion(content, {
+        recipientName: context?.recipientId,
+        relationship,
+        previousTips,
+        contentQuality: void 0
+        // Will be calculated by AI service
+      });
+      const contentScore = await this.hfService.scoreContent(content, context);
       return {
-        recommendedAmount: recommendedAmount.toString(),
-        confidence,
-        reasoning,
+        recommendedAmount: suggestion.amount,
+        confidence: suggestion.confidence,
+        reasoning: suggestion.reasoning,
         contentScore: {
-          quality,
-          engagement,
-          sentiment
+          quality: contentScore.quality,
+          engagement: contentScore.engagement,
+          sentiment: contentScore.sentiment.label
         }
       };
     } catch (error) {
@@ -1454,6 +1913,51 @@ var TipService = class {
         recommendedAmount: "5",
         confidence: 0.5,
         reasoning: "Unable to analyze content. Using default recommendation."
+      };
+    }
+  }
+  /**
+   * Get intelligent tip suggestion with personalized message
+   * Uses OpenAI GPT if available for context-aware suggestions
+   */
+  async getIntelligentTipSuggestion(chatContext, options) {
+    try {
+      let relationship;
+      let previousTips = 0;
+      if (options?.senderId && options?.recipientId) {
+        try {
+          const tipHistory = await this.db.tip.count({
+            where: {
+              senderId: options.senderId,
+              recipientId: options.recipientId,
+              status: "COMPLETED"
+            }
+          });
+          previousTips = tipHistory;
+          if (tipHistory > 5) relationship = "regular";
+          else if (tipHistory > 0) relationship = "friend";
+          else relationship = "stranger";
+        } catch (error) {
+        }
+      }
+      const suggestion = await this.aiService.generateTipSuggestion(chatContext, {
+        recipientName: options?.recipientName || options?.recipientId,
+        relationship,
+        previousTips
+      });
+      return {
+        amount: suggestion.amount,
+        message: suggestion.message,
+        confidence: suggestion.confidence,
+        reasoning: suggestion.reasoning
+      };
+    } catch (error) {
+      console.error("Error generating intelligent tip suggestion:", error);
+      return {
+        amount: "5",
+        message: "Great work! Keep it up! \u{1F680}",
+        confidence: 0.5,
+        reasoning: "Using default suggestion due to error."
       };
     }
   }
@@ -1673,6 +2177,9 @@ var TipService = class {
         await this.db.tip.update({
           where: { id: tip.id },
           data: { status: "COMPLETED", txHash: eventData.event?.transactionHash || txHash }
+        });
+        this.badgeService.checkAndAwardBadges(tip.senderId).catch((error) => {
+          console.error(`Error checking badges for user ${tip.senderId}:`, error);
         });
         if (tip.contentId) {
           try {
@@ -2104,6 +2611,659 @@ var ContentService = class {
   }
 };
 
+// server/services/AITipSuggestionService.ts
+import { z as z2 } from "zod";
+var TipSuggestionSchema = z2.object({
+  amount: z2.number().min(0.1).max(100).describe("Suggested tip amount in VERY"),
+  message: z2.string().max(280).describe("Personalized tip message"),
+  confidence: z2.number().min(0).max(1).describe("AI confidence score (0-1)"),
+  reason: z2.string().max(200).describe("Why this amount/message?"),
+  sentiment: z2.enum(["low", "medium", "high"]).describe("Appreciation level"),
+  category: z2.enum(["help", "content", "insight", "shoutout"]).describe("Tip category")
+});
+var AITipSuggestionService = class {
+  constructor() {
+    this.openai = null;
+    this.openaiAvailable = false;
+    this.cache = CacheService.getInstance();
+    this.openaiAvailable = false;
+    this.openai = null;
+    this.initializeOpenAI();
+  }
+  async initializeOpenAI() {
+    if (!config2.OPENAI_API_KEY || config2.OPENAI_API_KEY === "") {
+      console.log("\u26A0\uFE0F OpenAI API key not configured. AI Tip Suggestions will use fallback.");
+      return;
+    }
+    try {
+      const openaiModule = await import("openai");
+      const OpenAI = openaiModule.default || openaiModule;
+      this.openai = new OpenAI({ apiKey: config2.OPENAI_API_KEY });
+      this.openaiAvailable = true;
+      console.log("\u2705 OpenAI initialized for AI Tip Suggestions");
+    } catch (error) {
+      console.warn("OpenAI package not available or failed to initialize:", error);
+      this.openaiAvailable = false;
+    }
+  }
+  /**
+   * Generate intelligent tip suggestion using OpenAI GPT-4o-mini
+   */
+  async generateTipSuggestion(context, userPreferences = {}) {
+    const cacheKey = `ai:tip-suggestion:${Buffer.from(
+      context.message + context.sender + context.recipient + JSON.stringify(userPreferences)
+    ).toString("base64").slice(0, 80)}`;
+    const cached = await this.cache.get(cacheKey);
+    if (cached) {
+      return JSON.parse(cached);
+    }
+    if (!this.openai && config2.OPENAI_API_KEY && config2.OPENAI_API_KEY !== "") {
+      await this.initializeOpenAI();
+    }
+    if (!this.openaiAvailable || !this.openai) {
+      return this.getFallbackSuggestion(context);
+    }
+    try {
+      const systemPrompt = `
+You are a tip suggestion AI for VeryTippers (gasless chat tipping on VERY Chain).
+
+ANALYZE chat context and suggest:
+1. PERFECT tip amount (0.5-50 VERY, precise to 2 decimals)
+2. PERSONALIZED message (under 100 chars, warm/authentic)  
+3. CONFIDENCE score (0.0-1.0 based on clear appreciation signals)
+4. SENTIMENT level (low/medium/high)
+5. CATEGORY (help/content/insight/shoutout)
+
+CRITICAL RULES:
+- "thanks" alone \u2192 low confidence, 0.5-1 VERY
+- Code fixes/tutorials \u2192 high confidence, 3-10 VERY  
+- "life-changing"/"saved hours" \u2192 15-30 VERY
+- Emoji spam \u2192 low/no suggestion
+- Recent tips \u2192 avoid over-tipping
+- Match community norms (dev chat = higher, casual = lower)
+
+EXAMPLE OUTPUTS:
+{
+  "amount": 5.00,
+  "message": "Thanks for the detailed fix! \u{1F525}",
+  "confidence": 0.95,
+  "reason": "Code solution + strong appreciation emojis",
+  "sentiment": "high",
+  "category": "help"
+}
+
+Always return valid JSON matching schema exactly.
+`;
+      const userPrompt = `
+CHAT CONTEXT:
+Message: "${context.message}"
+From: ${context.sender} 
+To: ${context.recipient}
+Channel: ${context.channel}
+Reactions: ${context.reactions?.length || 0} 
+Time: ${new Date(context.timestamp).toLocaleString()}
+Prev tips: ${JSON.stringify(context.previousTips || [])}
+
+USER PREFERENCES:
+Avg tip: ${userPreferences.avgTip || "N/A"}
+Max tip: ${userPreferences.maxTip || "N/A"}
+
+Generate 1 optimal tip suggestion.
+`;
+      const completion = await this.openai.chat.completions.create({
+        model: config2.OPENAI_MODEL || "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.3,
+        // Low creativity, high consistency
+        max_tokens: 300,
+        response_format: { type: "json_object" }
+      });
+      const rawResponse = completion.choices[0]?.message?.content;
+      if (!rawResponse) {
+        throw new Error("No response from OpenAI");
+      }
+      const parsed = JSON.parse(rawResponse);
+      const validated = TipSuggestionSchema.parse(parsed);
+      await this.cache.set(cacheKey, JSON.stringify(validated), 1800);
+      console.log("\u2705 AI Tip Suggestion generated:", validated);
+      return validated;
+    } catch (error) {
+      console.error("AI Tip Suggestion failed:", error);
+      return this.getFallbackSuggestion(context);
+    }
+  }
+  /**
+   * Fallback suggestion when AI is unavailable
+   */
+  getFallbackSuggestion(context) {
+    const message = context.message.toLowerCase();
+    let amount = 1;
+    let confidence = 0.5;
+    let sentiment = "medium";
+    let category = "shoutout";
+    if (message.includes("thank") || message.includes("thanks")) {
+      amount = 1;
+      confidence = 0.6;
+      sentiment = "low";
+    }
+    if (message.includes("fix") || message.includes("solution") || message.includes("help")) {
+      amount = 5;
+      confidence = 0.75;
+      sentiment = "high";
+      category = "help";
+    }
+    if (message.includes("saved") || message.includes("life") || message.includes("amazing")) {
+      amount = 10;
+      confidence = 0.8;
+      sentiment = "high";
+    }
+    if (context.reactions && context.reactions.length > 5) {
+      amount *= 1.5;
+      confidence = Math.min(0.95, confidence + 0.1);
+    }
+    return {
+      amount: Math.min(50, Math.max(0.5, amount)),
+      message: `Thanks ${context.sender}!`,
+      confidence,
+      reason: "Fallback suggestion (AI unavailable)",
+      sentiment,
+      category
+    };
+  }
+};
+
+// server/services/LeaderboardInsightsService.ts
+import { z as z3 } from "zod";
+var InsightSchema = z3.object({
+  title: z3.string().max(60),
+  summary: z3.string().max(280),
+  emoji: z3.string().length(1),
+  keyStat: z3.string(),
+  callToAction: z3.string().max(100),
+  shareable: z3.boolean()
+});
+var LeaderboardInsightsService = class {
+  constructor() {
+    this.db = DatabaseService.getInstance();
+    this.cache = CacheService.getInstance();
+    this.openai = null;
+    this.openaiAvailable = false;
+    this.initializeOpenAI();
+  }
+  async initializeOpenAI() {
+    if (!config2.OPENAI_API_KEY || config2.OPENAI_API_KEY === "") {
+      console.log("OpenAI API key not configured for leaderboard insights. Using fallback.");
+      return;
+    }
+    try {
+      const OpenAI = (await import("openai")).default;
+      this.openai = new OpenAI({ apiKey: config2.OPENAI_API_KEY });
+      this.openaiAvailable = true;
+      console.log("OpenAI initialized for leaderboard insights");
+    } catch (error) {
+      console.warn("OpenAI package not available for leaderboard insights:", error);
+      this.openaiAvailable = false;
+    }
+  }
+  /**
+   * Generate personalized weekly leaderboard insights
+   */
+  async generatePersonalizedInsights(userData, communityStats) {
+    if (!this.openai && config2.OPENAI_API_KEY && config2.OPENAI_API_KEY !== "") {
+      await this.initializeOpenAI();
+    }
+    const cacheKey = `leaderboard:insights:${userData.rank}:${userData.totalTips}`;
+    const cached = await this.cache.get(cacheKey);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        return z3.array(InsightSchema).parse(parsed);
+      } catch (e) {
+      }
+    }
+    try {
+      if (this.openaiAvailable && this.openai) {
+        const insights = await this.generateInsightsWithOpenAI(userData, communityStats);
+        await this.cache.set(cacheKey, JSON.stringify(insights), 3600);
+        return insights;
+      } else {
+        return this.generateFallbackInsights(userData);
+      }
+    } catch (error) {
+      console.error("Leaderboard insights generation failed:", error);
+      return this.generateFallbackInsights(userData);
+    }
+  }
+  /**
+   * Generate insights using OpenAI
+   */
+  async generateInsightsWithOpenAI(userData, communityStats) {
+    const systemPrompt = `You are a social leaderboard insights generator for VeryTippers (chat tipping platform).
+
+Generate 3-5 ENGAGING, POSITIVE weekly summaries for users based on their:
+- Overall rank (#1-#10000)
+- Total tips sent/received
+- Top supported creators
+- Weekly growth %
+- Special badges/achievements
+- Comparison to friends
+
+TONE: Excited, encouraging, social, gamified \u{1F3C6}
+STYLE: Short, punchy, shareable (Twitter/X ready)
+EMOJI: 1 perfect emoji per insight
+
+EXAMPLES:
+\u{1F3C6} "You're #3 overall! Up 12 spots this week!"
+\u{1F48E} "Top supporter of @alice - she sent you a shoutout!"
+\u{1F680} "150% growth! You're crushing it!"
+
+ALWAYS include:
+- 1 emoji
+- Personal achievement
+- Social proof (# rank, top supporter)
+- Growth/call-to-action
+- Under 280 chars total
+
+Return VALID JSON array matching this exact schema:
+[{
+  "title": "string (max 60 chars)",
+  "summary": "string (max 280 chars)",
+  "emoji": "single emoji character",
+  "keyStat": "string",
+  "callToAction": "string (max 100 chars)",
+  "shareable": true
+}]`;
+    const percentile = ((communityStats.totalUsers - userData.rank) / communityStats.totalUsers * 100).toFixed(1);
+    const userPrompt = `USER DATA:
+Rank: #${userData.rank} (${percentile}th percentile)
+Total tips: ${userData.totalTips}
+Total amount: ${userData.totalAmount} VERY
+Weekly growth: ${userData.weeklyGrowth > 0 ? "+" : ""}${userData.weeklyGrowth}%
+Badges: ${userData.badges.length > 0 ? userData.badges.join(", ") : "None yet"}
+
+TOP SUPPORTED:
+${userData.topSupported.slice(0, 5).map((u) => `@${u.username}: ${u.tips} tips (${u.amount} VERY)`).join("\n") || "None yet"}
+
+FRIENDS COMPARISON:
+${userData.comparedToFriends.slice(0, 5).map((f) => `@${f.username} (#${f.rank}, ${f.difference > 0 ? "+" : ""}${f.difference} spots ${f.difference > 0 ? "above" : "below"} you)`).join("\n") || "No friends data"}
+
+COMMUNITY:
+${communityStats.totalUsers} users, avg ${communityStats.avgTips.toFixed(1)} tips/user
+
+Generate 3-5 personalized insights (most important first). Return ONLY valid JSON array.`;
+    const completion = await this.openai.chat.completions.create({
+      model: config2.OPENAI_MODEL || "gpt-4o-mini",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      temperature: 0.7,
+      max_tokens: 800,
+      response_format: { type: "json_object" }
+    });
+    const rawResponse = completion.choices[0]?.message?.content;
+    if (!rawResponse) {
+      throw new Error("Empty response from OpenAI");
+    }
+    try {
+      const parsed = JSON.parse(rawResponse);
+      const insightsArray = parsed.insights || parsed;
+      const validated = z3.array(InsightSchema).parse(insightsArray);
+      return validated.slice(0, 5);
+    } catch (parseError) {
+      console.error("Failed to parse OpenAI response:", parseError);
+      throw parseError;
+    }
+  }
+  /**
+   * Fallback insights when AI unavailable
+   */
+  generateFallbackInsights(userData) {
+    const insights = [];
+    insights.push({
+      title: `Rank #${userData.rank}`,
+      summary: `You're #${userData.rank} on the VeryTippers leaderboard!`,
+      emoji: "\u{1F3C6}",
+      keyStat: `${userData.totalTips} tips`,
+      callToAction: "Keep tipping!",
+      shareable: true
+    });
+    if (userData.topSupported.length > 0) {
+      const top = userData.topSupported[0];
+      insights.push({
+        title: `Top Supporter`,
+        summary: `You're the top supporter of @${top.username}!`,
+        emoji: "\u{1F48E}",
+        keyStat: `${top.tips} tips sent`,
+        callToAction: "Continue supporting!",
+        shareable: true
+      });
+    }
+    if (userData.weeklyGrowth > 0) {
+      insights.push({
+        title: `Growing Fast!`,
+        summary: `You've grown ${userData.weeklyGrowth}% this week!`,
+        emoji: "\u{1F680}",
+        keyStat: `+${userData.weeklyGrowth}% growth`,
+        callToAction: "Keep it up!",
+        shareable: true
+      });
+    }
+    if (userData.comparedToFriends.length > 0) {
+      const friend = userData.comparedToFriends[0];
+      if (friend.difference < 0) {
+        insights.push({
+          title: `Beat @${friend.username}!`,
+          summary: `You're ${Math.abs(friend.difference)} spots ahead of @${friend.username}!`,
+          emoji: "\u{1F947}",
+          keyStat: `#${userData.rank} vs #${friend.rank}`,
+          callToAction: "Stay ahead!",
+          shareable: true
+        });
+      }
+    }
+    return insights;
+  }
+  /**
+   * Fetch leaderboard data for a user
+   */
+  async fetchLeaderboardData(userId, period = "weekly") {
+    const db = this.db;
+    const startDate = this.getPeriodStartDate(period);
+    const tipsSent = await db.tip.findMany({
+      where: {
+        senderId: userId,
+        status: "COMPLETED",
+        createdAt: { gte: startDate }
+      },
+      include: { recipient: true }
+    });
+    const tipsReceived = await db.tip.findMany({
+      where: {
+        recipientId: userId,
+        status: "COMPLETED",
+        createdAt: { gte: startDate }
+      }
+    });
+    const totalTips = tipsSent.length;
+    const totalAmount = tipsSent.reduce((sum, tip) => sum + BigInt(tip.amount), BigInt(0)).toString();
+    const recipientMap = /* @__PURE__ */ new Map();
+    tipsSent.forEach((tip) => {
+      const recipientId = tip.recipientId;
+      const current = recipientMap.get(recipientId) || { count: 0, total: BigInt(0) };
+      recipientMap.set(recipientId, {
+        count: current.count + 1,
+        total: current.total + BigInt(tip.amount)
+      });
+    });
+    const recipientIds = Array.from(recipientMap.keys());
+    const recipients = await db.user.findMany({
+      where: { id: { in: recipientIds } },
+      select: { id: true, walletAddress: true }
+    });
+    const recipientDataMap = new Map(recipients.map((r) => [r.id, r.walletAddress]));
+    const topSupported = Array.from(recipientMap.entries()).map(([recipientId, stats]) => {
+      const walletAddress = recipientDataMap.get(recipientId) || recipientId;
+      const username = walletAddress.length > 10 ? `${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}` : recipientId.substring(0, 8);
+      return {
+        username,
+        tips: stats.count,
+        amount: stats.total.toString()
+      };
+    }).sort((a, b) => b.tips - a.tips).slice(0, 5);
+    const allTips = await db.tip.findMany({
+      where: {
+        status: "COMPLETED",
+        createdAt: { gte: startDate }
+      },
+      select: {
+        senderId: true,
+        amount: true
+      }
+    });
+    const userStatsMap = /* @__PURE__ */ new Map();
+    allTips.forEach((tip) => {
+      const existing = userStatsMap.get(tip.senderId) || { tips: 0, amount: BigInt(0) };
+      existing.tips += 1;
+      existing.amount += BigInt(tip.amount);
+      userStatsMap.set(tip.senderId, existing);
+    });
+    const sortedUsers = Array.from(userStatsMap.entries()).map(([userId2, stats]) => ({
+      userId: userId2,
+      tips: stats.tips,
+      amount: stats.amount
+    })).sort((a, b) => {
+      if (a.amount !== b.amount) {
+        return b.amount > a.amount ? 1 : -1;
+      }
+      return b.tips - a.tips;
+    });
+    const userRankIndex = sortedUsers.findIndex((u) => u.userId === userId);
+    const rank = userRankIndex >= 0 ? userRankIndex + 1 : sortedUsers.length + 1;
+    const weeklyGrowth = 0;
+    const badges = [];
+    const comparedToFriends = [];
+    const totalUsers = sortedUsers.length;
+    const avgTips = totalUsers > 0 ? sortedUsers.reduce((sum, u) => sum + u.tips, 0) / totalUsers : 0;
+    return {
+      rank,
+      totalTips,
+      totalAmount,
+      topSupported,
+      weeklyGrowth,
+      badges,
+      comparedToFriends,
+      communityStats: {
+        totalUsers,
+        avgTips
+      }
+    };
+  }
+  getPeriodStartDate(period) {
+    const now = /* @__PURE__ */ new Date();
+    switch (period) {
+      case "daily":
+        return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      case "weekly":
+        const dayOfWeek = now.getDay();
+        const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+        const monday = new Date(now);
+        monday.setDate(now.getDate() - daysToMonday);
+        monday.setHours(0, 0, 0, 0);
+        return monday;
+      case "monthly":
+        return new Date(now.getFullYear(), now.getMonth(), 1);
+      default:
+        return /* @__PURE__ */ new Date(0);
+    }
+  }
+};
+
+// server/services/ModerationService.ts
+import { HfInference as HfInference3 } from "@huggingface/inference";
+import { z as z4 } from "zod";
+var ModerationResultSchema = z4.object({
+  isSafe: z4.boolean(),
+  sentiment: z4.enum(["positive", "neutral", "negative"]),
+  toxicityScore: z4.number().min(0).max(1),
+  toxicityLabels: z4.array(z4.object({
+    label: z4.string(),
+    score: z4.number().min(0).max(1)
+  })),
+  flaggedReason: z4.string().nullable(),
+  action: z4.enum(["allow", "warn", "block", "quarantine"])
+});
+var MODERATION_THRESHOLDS = {
+  toxicityBlock: 0.85,
+  // Hard block highly toxic
+  toxicityWarn: 0.65,
+  // Show warning
+  negativeSentiment: 0.75
+};
+var ModerationService = class {
+  constructor() {
+    this.hf = new HfInference3(config2.HUGGINGFACE_API_KEY);
+  }
+  /**
+   * Moderate a tip message using AI models
+   */
+  async moderateTipMessage(message, senderId, recipientId, context) {
+    const normalizedMessage = message.trim().toLowerCase();
+    const quickBlock = this.quickHeuristicCheck(normalizedMessage);
+    if (quickBlock) {
+      return {
+        isSafe: false,
+        sentiment: "negative",
+        toxicityScore: 1,
+        toxicityLabels: [{ label: "heuristic_block", score: 1 }],
+        flaggedReason: quickBlock,
+        action: "block"
+      };
+    }
+    try {
+      const [sentimentResult, toxicityResult] = await Promise.all([
+        this.analyzeSentiment(normalizedMessage),
+        this.analyzeToxicity(normalizedMessage)
+      ]);
+      const result = this.combineResults(sentimentResult, toxicityResult);
+      console.log(`\u2705 Moderation: "${message.substring(0, 50)}..." \u2192 ${result.action} (toxicity: ${result.toxicityScore.toFixed(2)})`);
+      return ModerationResultSchema.parse(result);
+    } catch (error) {
+      console.error("Moderation failed:", error);
+      return {
+        isSafe: true,
+        sentiment: "neutral",
+        toxicityScore: 0,
+        toxicityLabels: [],
+        flaggedReason: null,
+        action: "allow"
+      };
+    }
+  }
+  quickHeuristicCheck(message) {
+    const blocks = [
+      /\b(fuck|shit|damn|asshole|retard|cunt)\b/gi,
+      /\b(kys|kill yourself|die|suicide)\b/gi,
+      /\b(scam|fraud|rug)\b.*\b(you|ur)\b/gi,
+      /\b(gay|fag|tranny|nigger)\b/gi
+    ];
+    for (const pattern of blocks) {
+      if (pattern.test(message)) {
+        return "Contains prohibited language";
+      }
+    }
+    if (message.includes("@") && message.includes("block") && message.includes("wallet")) {
+      return "Suspicious wallet/block report";
+    }
+    return null;
+  }
+  async analyzeSentiment(text) {
+    try {
+      const result = await this.hf.textClassification({
+        model: "cardiffnlp/twitter-roberta-base-sentiment-latest",
+        inputs: text
+      });
+      const scores = Array.isArray(result) ? result : [result];
+      const firstResult = scores[0];
+      if (firstResult && Array.isArray(firstResult)) {
+        const scoreValues = firstResult.map((r) => typeof r === "number" ? r : r.score || 0);
+        const labels = ["negative", "neutral", "positive"];
+        const maxScore = Math.max(...scoreValues);
+        const sentiment = labels[scoreValues.indexOf(maxScore)];
+        return { sentiment, confidence: maxScore };
+      } else if (firstResult && firstResult.label) {
+        const label = firstResult.label.toLowerCase();
+        const sentiment = label.includes("positive") ? "positive" : label.includes("negative") ? "negative" : "neutral";
+        return { sentiment, confidence: firstResult.score || 0.5 };
+      }
+      return { sentiment: "neutral", confidence: 0.5 };
+    } catch (error) {
+      console.error("Sentiment analysis error:", error);
+      return { sentiment: "neutral", confidence: 0.5 };
+    }
+  }
+  async analyzeToxicity(text) {
+    try {
+      const result = await this.hf.textClassification({
+        model: "unitary/toxic-bert",
+        inputs: text,
+        parameters: { return_all_scores: true }
+      });
+      const scores = Array.isArray(result) ? result : [result];
+      const firstResult = scores[0];
+      if (Array.isArray(firstResult)) {
+        const toxicityScores = firstResult.map(
+          (r) => typeof r === "number" ? r : r.score || 0
+        );
+        const toxicityScore = Math.max(...toxicityScores);
+        return {
+          toxicityScore,
+          labels: firstResult.map((r, i) => ({
+            label: r.label || `label_${i}`,
+            score: typeof r === "number" ? r : r.score || 0
+          })),
+          scores: toxicityScores
+        };
+      } else if (firstResult && firstResult.scores && Array.isArray(firstResult.scores)) {
+        const toxicityScores = firstResult.scores.map((s) => s.score || 0);
+        const toxicityScore = Math.max(...toxicityScores);
+        return {
+          toxicityScore,
+          labels: firstResult.labels || [],
+          scores: toxicityScores
+        };
+      }
+      return {
+        toxicityScore: 0,
+        labels: [],
+        scores: []
+      };
+    } catch (error) {
+      console.error("Toxicity analysis error:", error);
+      return {
+        toxicityScore: 0,
+        labels: [],
+        scores: []
+      };
+    }
+  }
+  combineResults(sentiment, toxicity) {
+    const toxicityScore = toxicity.toxicityScore || 0;
+    const sentimentScore = sentiment.sentiment === "negative" ? 1 : 0;
+    if (toxicityScore >= MODERATION_THRESHOLDS.toxicityBlock) {
+      return {
+        isSafe: false,
+        sentiment: "negative",
+        toxicityScore,
+        toxicityLabels: toxicity.labels || [],
+        flaggedReason: "High toxicity detected",
+        action: "block"
+      };
+    }
+    if (toxicityScore >= MODERATION_THRESHOLDS.toxicityWarn || sentimentScore > MODERATION_THRESHOLDS.negativeSentiment) {
+      return {
+        isSafe: true,
+        sentiment: sentiment.sentiment || "neutral",
+        toxicityScore,
+        toxicityLabels: toxicity.labels || [],
+        flaggedReason: "Moderate toxicity",
+        action: "warn"
+      };
+    }
+    return {
+      isSafe: true,
+      sentiment: sentiment.sentiment || "positive",
+      toxicityScore,
+      toxicityLabels: toxicity.labels || [],
+      flaggedReason: null,
+      action: "allow"
+    };
+  }
+};
+
 // server/index.ts
 var __filename2 = fileURLToPath2(import.meta.url);
 var __dirname2 = path2.dirname(__filename2);
@@ -2111,6 +3271,11 @@ var tipService = new TipService();
 var contentService = new ContentService();
 var analyticsService = new TipAnalyticsService();
 var hfService = new HuggingFaceService();
+var badgeService = new BadgeService();
+var leaderboardInsightsService = new LeaderboardInsightsService();
+var aiTipSuggestionService = new AITipSuggestionService();
+var aiService = new AIService();
+var moderationService = new ModerationService();
 async function startServer() {
   const app = express();
   const server = createServer(app);
@@ -2123,9 +3288,42 @@ async function startServer() {
       services: {
         backend: "running",
         ai: "HuggingFaceService",
-        web3: "BlockchainService"
+        web3: "BlockchainService",
+        moderation: "ModerationService"
       }
     });
+  });
+  app.post("/api/v1/moderation/check", async (req, res) => {
+    const { message, senderId, recipientId, context } = req.body;
+    if (!message) {
+      return res.status(400).json({ success: false, message: "Message is required" });
+    }
+    try {
+      const result = await moderationService.moderateTipMessage(
+        message,
+        senderId,
+        recipientId,
+        context
+      );
+      res.status(200).json({
+        success: true,
+        result
+      });
+    } catch (error) {
+      console.error("Error checking moderation:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to check message moderation",
+        result: {
+          isSafe: true,
+          sentiment: "neutral",
+          toxicityScore: 0,
+          toxicityLabels: [],
+          flaggedReason: null,
+          action: "allow"
+        }
+      });
+    }
   });
   app.post("/api/v1/tip", async (req, res) => {
     const { senderId, recipientId, amount, token, message, contentId } = req.body;
@@ -2168,16 +3366,38 @@ async function startServer() {
     }
   });
   app.post("/api/v1/tip/recommendation", async (req, res) => {
-    const { content, authorId, contentType } = req.body;
+    const { content, authorId, contentType, recipientId, senderId } = req.body;
     if (!content) {
       return res.status(400).json({ success: false, message: "Content is required" });
     }
     try {
-      const recommendation = await tipService.getTipRecommendation(content, { authorId, contentType });
+      const recommendation = await tipService.getTipRecommendation(content, {
+        authorId,
+        contentType,
+        recipientId,
+        senderId
+      });
       res.status(200).json({ success: true, data: recommendation });
     } catch (error) {
       console.error("Error generating tip recommendation:", error);
       res.status(500).json({ success: false, message: "Failed to generate recommendation" });
+    }
+  });
+  app.post("/api/v1/tip/intelligent-suggestion", async (req, res) => {
+    const { chatContext, recipientId, senderId, recipientName } = req.body;
+    if (!chatContext) {
+      return res.status(400).json({ success: false, message: "Chat context is required" });
+    }
+    try {
+      const suggestion = await tipService.getIntelligentTipSuggestion(chatContext, {
+        recipientId,
+        senderId,
+        recipientName
+      });
+      res.status(200).json({ success: true, data: suggestion });
+    } catch (error) {
+      console.error("Error generating intelligent tip suggestion:", error);
+      res.status(500).json({ success: false, message: "Failed to generate suggestion" });
     }
   });
   app.post("/api/v1/tip/message-suggestions", async (req, res) => {
@@ -2193,6 +3413,144 @@ async function startServer() {
     } catch (error) {
       console.error("Error generating message suggestions:", error);
       res.status(500).json({ success: false, message: "Failed to generate suggestions" });
+    }
+  });
+  app.post("/api/voice/parse", async (req, res) => {
+    const { transcript } = req.body;
+    if (!transcript || typeof transcript !== "string") {
+      return res.status(400).json({ success: false, message: "Transcript is required" });
+    }
+    try {
+      const parseVoiceCommandFallback = (text) => {
+        const normalized = text.toLowerCase().replace(/ dollars?/g, " VERY").replace(/verys?/g, "VERY").replace(/send /g, "tip ").replace(/give /g, "tip ").trim();
+        const tipMatch = normalized.match(/tip|send|give/i);
+        if (!tipMatch) return null;
+        const usernameMatch = normalized.match(/@?(\w+)/i);
+        if (!usernameMatch) return null;
+        const recipient = usernameMatch[0].startsWith("@") ? usernameMatch[0] : `@${usernameMatch[0]}`;
+        const numberWords = {
+          "one": 1,
+          "two": 2,
+          "three": 3,
+          "four": 4,
+          "five": 5,
+          "six": 6,
+          "seven": 7,
+          "eight": 8,
+          "nine": 9,
+          "ten": 10,
+          "eleven": 11,
+          "twelve": 12,
+          "thirteen": 13,
+          "fourteen": 14,
+          "fifteen": 15,
+          "sixteen": 16,
+          "seventeen": 17,
+          "eighteen": 18,
+          "nineteen": 19,
+          "twenty": 20
+        };
+        let amount = 0;
+        const numericMatch = normalized.match(/(\d+\.?\d*)/);
+        if (numericMatch) {
+          amount = parseFloat(numericMatch[1]);
+        } else {
+          for (const [word, value] of Object.entries(numberWords)) {
+            if (normalized.includes(word)) {
+              amount = value;
+              break;
+            }
+          }
+        }
+        if (amount === 0 || amount < 0.1) return null;
+        return {
+          action: "tip",
+          recipient,
+          amount: Math.min(amount, 100),
+          currency: "VERY"
+        };
+      };
+      let command = null;
+      if (config2.OPENAI_API_KEY && config2.OPENAI_API_KEY !== "") {
+        try {
+          const OpenAI = (await import("openai")).default;
+          const openai = new OpenAI({ apiKey: config2.OPENAI_API_KEY });
+          const prompt = `Parse this voice command into JSON:
+"${transcript}"
+
+Expected format: {action:"tip", recipient:"@username", amount:number, currency:"VERY", message?:"optional message"}
+Examples:
+"tip @alice 5 very" \u2192 {action:"tip", recipient:"@alice", amount:5, currency:"VERY"}
+"send bob ten dollars" \u2192 {action:"tip", recipient:"@bob", amount:10, currency:"VERY"}
+"give @charlie 3.5" \u2192 {action:"tip", recipient:"@charlie", amount:3.5, currency:"VERY"}
+
+Return ONLY valid JSON matching the schema.`;
+          const completion = await openai.chat.completions.create({
+            model: config2.OPENAI_MODEL || "gpt-4o-mini",
+            messages: [
+              {
+                role: "system",
+                content: 'Parse natural voice commands into structured JSON. Return ONLY valid JSON: {action:"tip", recipient:"@username", amount:number, currency:"VERY", message?:"optional"}'
+              },
+              { role: "user", content: prompt }
+            ],
+            temperature: 0.1,
+            max_tokens: 150,
+            response_format: { type: "json_object" }
+          });
+          const parsed = JSON.parse(completion.choices[0]?.message?.content || "{}");
+          if (parsed.action && parsed.recipient && parsed.amount) {
+            command = parsed;
+          }
+        } catch (openaiError) {
+          console.warn("OpenAI parsing failed, using fallback:", openaiError);
+        }
+      }
+      if (!command) {
+        command = parseVoiceCommandFallback(transcript);
+      }
+      if (command) {
+        return res.status(200).json({
+          success: true,
+          command,
+          confidence: command.confidence || 0.85
+        });
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: "Could not parse voice command",
+          command: null
+        });
+      }
+    } catch (error) {
+      console.error("Error parsing voice command:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error",
+        command: null
+      });
+    }
+  });
+  app.post("/api/v1/ai/tip-suggestion", async (req, res) => {
+    const { context, userPreferences } = req.body;
+    if (!context || !context.message || !context.sender) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields: context.message, context.sender"
+      });
+    }
+    try {
+      const suggestion = await aiTipSuggestionService.generateTipSuggestion(
+        context,
+        userPreferences || {}
+      );
+      res.status(200).json({ success: true, data: suggestion });
+    } catch (error) {
+      console.error("Error generating AI tip suggestion:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to generate AI tip suggestion"
+      });
     }
   });
   app.post("/api/v1/tip/dataset-suggestion", async (req, res) => {
@@ -2249,6 +3607,52 @@ async function startServer() {
       res.status(500).json({ success: false, message: "Failed to fetch user analytics" });
     }
   });
+  app.get("/api/v1/ai/insights/user/:userId", async (req, res) => {
+    const { userId } = req.params;
+    try {
+      const analytics = await analyticsService.getUserAnalytics(userId);
+      const insights = await aiService.generateLeaderboardInsight(userId, {
+        topRecipients: analytics.favoriteRecipients?.map((r) => ({
+          id: r.userId || r.id,
+          name: r.username || r.name,
+          tipCount: r.count || 0,
+          totalAmount: parseFloat(r.totalAmount || "0")
+        })) || [],
+        topSenders: analytics.favoriteSenders?.map((s) => ({
+          id: s.userId || s.id,
+          name: s.username || s.name,
+          tipCount: s.count || 0,
+          totalAmount: parseFloat(s.totalAmount || "0")
+        })) || [],
+        totalTips: analytics.tipsSent || 0,
+        totalReceived: parseFloat(analytics.totalReceived || "0"),
+        streak: analytics.tipStreak || 0
+      });
+      res.status(200).json({ success: true, data: insights });
+    } catch (error) {
+      console.error("Error generating personalized insights:", error);
+      res.status(500).json({ success: false, message: "Failed to generate insights" });
+    }
+  });
+  app.get("/api/v1/ai/badges/user/:userId", async (req, res) => {
+    const { userId } = req.params;
+    try {
+      const analytics = await analyticsService.getUserAnalytics(userId);
+      const uniqueRecipients = analytics.favoriteRecipients?.length || 0;
+      const badgeSuggestions = await aiService.suggestBadges(userId, {
+        tipCount: analytics.tipsSent || 0,
+        totalAmount: parseFloat(analytics.totalSent || "0"),
+        uniqueRecipients,
+        streak: analytics.tipStreak || 0,
+        contentCreated: 0
+        // Not available in current analytics, can be added later
+      });
+      res.status(200).json({ success: true, data: badgeSuggestions });
+    } catch (error) {
+      console.error("Error generating badge suggestions:", error);
+      res.status(500).json({ success: false, message: "Failed to generate badge suggestions" });
+    }
+  });
   app.get("/api/v1/analytics/trends", async (req, res) => {
     const period = req.query.period || "day";
     const limit = parseInt(req.query.limit) || 30;
@@ -2268,6 +3672,31 @@ async function startServer() {
     } catch (error) {
       console.error("Error fetching tip feed:", error);
       res.status(500).json({ success: false, message: "Failed to fetch feed" });
+    }
+  });
+  app.get("/api/v1/leaderboard/:userId", async (req, res) => {
+    const { userId } = req.params;
+    const period = req.query.period || "weekly";
+    try {
+      const data = await leaderboardInsightsService.fetchLeaderboardData(userId, period);
+      res.status(200).json(data);
+    } catch (error) {
+      console.error("Error fetching leaderboard data:", error);
+      res.status(500).json({ success: false, message: "Failed to fetch leaderboard data" });
+    }
+  });
+  app.post("/api/v1/leaderboard/insights", async (req, res) => {
+    const { userData, communityStats } = req.body;
+    if (!userData) {
+      return res.status(400).json({ success: false, message: "userData is required" });
+    }
+    try {
+      const stats = communityStats || { totalUsers: 1e3, avgTips: 10 };
+      const insights = await leaderboardInsightsService.generatePersonalizedInsights(userData, stats);
+      res.status(200).json({ success: true, insights });
+    } catch (error) {
+      console.error("Error generating insights:", error);
+      res.status(500).json({ success: false, message: "Failed to generate insights" });
     }
   });
   app.post("/api/v1/content", async (req, res) => {
@@ -2398,6 +3827,79 @@ async function startServer() {
     } catch (error) {
       console.error("Error recording view:", error);
       res.status(500).json({ success: false, message: "Internal server error." });
+    }
+  });
+  app.post("/api/v1/badges/check", async (req, res) => {
+    const { userId } = req.body;
+    if (!userId) {
+      return res.status(400).json({ success: false, message: "Missing required field: userId" });
+    }
+    try {
+      const newBadges = await badgeService.checkAndAwardBadges(userId);
+      res.status(200).json({
+        success: true,
+        data: {
+          newBadges,
+          count: newBadges.length
+        }
+      });
+    } catch (error) {
+      console.error("Error checking badges:", error);
+      res.status(500).json({ success: false, message: "Failed to check badges" });
+    }
+  });
+  app.get("/api/v1/badges/user/:userId", async (req, res) => {
+    const { userId } = req.params;
+    try {
+      const badges = await badgeService.getUserBadges(userId);
+      const stats = await badgeService.getUserBadgeStats(userId);
+      res.status(200).json({
+        success: true,
+        data: {
+          badges,
+          stats
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching user badges:", error);
+      res.status(500).json({ success: false, message: "Failed to fetch badges" });
+    }
+  });
+  app.get("/api/v1/badges", async (req, res) => {
+    try {
+      const badges = await badgeService.getAllBadges();
+      res.status(200).json({
+        success: true,
+        data: badges,
+        count: badges.length
+      });
+    } catch (error) {
+      console.error("Error fetching badges:", error);
+      res.status(500).json({ success: false, message: "Failed to fetch badges" });
+    }
+  });
+  app.get("/api/v1/badges/:badgeId", async (req, res) => {
+    const { badgeId } = req.params;
+    try {
+      const badge = await badgeService.getBadge(badgeId);
+      if (badge) {
+        res.status(200).json({ success: true, data: badge });
+      } else {
+        res.status(404).json({ success: false, message: "Badge not found" });
+      }
+    } catch (error) {
+      console.error("Error fetching badge:", error);
+      res.status(500).json({ success: false, message: "Failed to fetch badge" });
+    }
+  });
+  app.get("/api/v1/badges/user/:userId/stats", async (req, res) => {
+    const { userId } = req.params;
+    try {
+      const stats = await badgeService.getUserBadgeStats(userId);
+      res.status(200).json({ success: true, data: stats });
+    } catch (error) {
+      console.error("Error fetching badge stats:", error);
+      res.status(500).json({ success: false, message: "Failed to fetch badge stats" });
     }
   });
   const staticPath = process.env.NODE_ENV === "production" ? path2.resolve(__dirname2, "public") : path2.resolve(__dirname2, "..", "dist", "public");
