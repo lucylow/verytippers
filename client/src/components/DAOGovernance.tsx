@@ -159,8 +159,30 @@ export const DAOGovernance: React.FC = () => {
           </Alert>
         )}
 
-        {/* Voting Power Breakdown */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-4 bg-slate-800">
+            <TabsTrigger value="overview" className="flex items-center gap-2">
+              <TrendingUp className="w-4 h-4" />
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="proposals" className="flex items-center gap-2">
+              <FileText className="w-4 h-4" />
+              Proposals
+            </TabsTrigger>
+            <TabsTrigger value="activity" className="flex items-center gap-2">
+              <Activity className="w-4 h-4" />
+              Activity
+            </TabsTrigger>
+            <TabsTrigger value="leaderboard" className="flex items-center gap-2">
+              <Trophy className="w-4 h-4" />
+              Leaderboard
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="overview" className="space-y-6 mt-6">
+            {/* Voting Power Breakdown */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="bg-slate-900/50 border-slate-700 hover:border-cyan-500/50 transition-colors">
             <CardContent className="pt-6">
               <div className="text-center">

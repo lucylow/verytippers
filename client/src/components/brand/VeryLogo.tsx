@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useId } from "react";
 
 interface VeryLogoProps {
   variant?: "full" | "icon" | "text";
@@ -22,7 +22,7 @@ export const VeryLogo: React.FC<VeryLogoProps> = ({
 }) => {
   const { icon: iconSize, text: textSize } = sizeMap[size];
   const shouldShowText = variant === "full" || variant === "text";
-  const gradientId = `veryGradient-${Math.random().toString(36).substr(2, 9)}`;
+  const gradientId = useId();
 
   return (
     <div className={`flex items-center gap-2 ${className}`}>
