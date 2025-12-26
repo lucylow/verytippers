@@ -4,167 +4,349 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model User {
-  id                 String                @id @default(uuid())
-  walletAddress      String?               @unique
-  username           String?               @unique
-  displayName        String?
-  avatarUrl          String?
-  publicKey          String?
-  tipsSent           Tip[]                 @relation("Sender")
-  tipsReceived       Tip[]                 @relation("Recipient")
-  content            Content[]             @relation("ContentCreator")
-  subscriptions      ContentSubscription[] @relation("Subscriber")
-  creatorSubscriptions ContentSubscription[] @relation("Creator")
-  badges             UserBadge[]           @relation("UserBadges")
-  stats              UserStats?
-  createdAt          DateTime              @default(now())
-  updatedAt          DateTime              @updatedAt
+  id                  String    @id @default(cuid())
+  verychatId          String    @unique
+  username            String?   @unique
+  walletAddress       String    @unique
+  email               String?   @unique
+  avatarUrl           String?
+  kycStatus           KYCStatus @default(NONE)
+  kycMetadata         Json?
+  
+  // Stats
+  totalTipsSent       BigInt    @default(0)
+  totalTipsReceived   BigInt    @default(0)
+  uniqueUsersTipped   Int       @default(0)
+  tipStreak           Int       @default(0)
+  lastTipAt           DateTime?
+  
+  // Token balances
+  tokenBalances       Json      @default("{}")
+  
+  // Relationships
+  tipsSent            Tip[]     @relation("TipsSent")
+  tipsReceived        Tip[]     @relation("TipsReceived")
+  badges              UserBadge[]
+  leaderboardEntries  LeaderboardEntry[]
+  gasSponsorship      GasSponsorship?
+  aiConversations     AIConversation[]
+  voiceCommands       VoiceCommand[]
+  
+  // Timestamps
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  
+  // Indexes
+  @@index([verychatId])
+  @@index([walletAddress])
+  @@index([kycStatus])
+}
+
+enum KYCStatus {
+  NONE
+  PENDING
+  VERIFIED
+  REJECTED
 }
 
 model Tip {
-  id             String    @id @default(uuid())
-  senderId       String
-  recipientId    String
-  amount         BigInt
-  ipfsCid        String    @unique
-  moderation     Json?
-  txHash         String?   @unique
-  status         TipStatus @default(PENDING)
-  sender         User      @relation("Sender", fields: [senderId], references: [id])
-  recipient      User      @relation("Recipient", fields: [recipientId], references: [id])
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-
+  id              String   @id @default(cuid())
+  
+  // Participants
+  senderId        String
+  sender          User     @relation("TipsSent", fields: [senderId], references: [id])
+  
+  recipientId     String
+  recipient       User     @relation("TipsReceived", fields: [recipientId], references: [id])
+  
+  // Transaction details
+  tokenAddress    String
+  amount          String   // Stored as string for precision
+  amountInWei     BigInt
+  
+  // Message
+  messageHash     String?
+  messageEncrypted String?
+  messageSentiment SentimentAnalysis?
+  
+  // Blockchain
+  transactionHash String   @unique
+  blockNumber     Int?
+  tipId           Int?     // Smart contract tip ID
+  
+  // AI Metadata
+  aiSuggestionId  String?
+  aiConfidence    Float?
+  aiFeatures      Json?
+  
+  // Status
+  status          TipStatus @default(PENDING)
+  errorReason     String?
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  confirmedAt     DateTime?
+  
+  // Indexes
   @@index([senderId])
   @@index([recipientId])
-  @@index([status])
+  @@index([transactionHash])
   @@index([createdAt])
+  @@index([status])
 }
 
 enum TipStatus {
   PENDING
-  PROCESSED
+  CONFIRMED
   FAILED
+  CANCELLED
+}
+
+model SentimentAnalysis {
+  id           String   @id @default(cuid())
+  tipId        String   @unique
+  tip          Tip      @relation(fields: [tipId], references: [id])
+  
+  sentiment    String   // positive, neutral, negative
+  score        Float
+  categories   Json     // { toxicity: 0.1, spam: 0.05, ... }
+  flags        String[] // ["hate_speech", "harassment"]
+  
+  // AI Metadata
+  model        String
+  version      String
+  processedAt  DateTime @default(now())
 }
 
 model Badge {
-  id          String     @id @default(cuid())
-  badgeId     String     @unique // User-friendly badge identifier (e.g., 'first-tip')
-  name        String
-  emoji       String
-  description String
-  rarity      String     // bronze, silver, gold, platinum, diamond
-  criteria    Json       // Badge criteria definition
-  imageUrl    String?
-  isActive    Boolean    @default(true)
-  userBadges  UserBadge[] @relation("BadgeUsers")
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-
-  @@index([badgeId])
-  @@index([rarity])
+  id              String   @id @default(cuid())
+  name            String   @unique
+  description     String
+  imageUrl        String
+  
+  // Requirements
+  requirements    Json     // { minTipsSent: 1, minTipsReceived: 10, ... }
+  
+  // Smart Contract
+  contractBadgeId Int?
+  onChain         Boolean  @default(false)
+  
+  // Community
+  isCommunityFunded Boolean @default(false)
+  poolBalance      String  @default("0")
+  
+  // Stats
+  totalMinted      Int     @default(0)
+  
+  // Timestamps
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  
+  // Relationships
+  userBadges       UserBadge[]
 }
 
 model UserBadge {
-  id          String   @id @default(uuid())
-  userId      String
-  user        User     @relation("UserBadges", fields: [userId], references: [id])
-  badgeInternalId String // References Badge.id (primary key)
-  badge       Badge    @relation("BadgeUsers", fields: [badgeInternalId], references: [id])
-  badgeId     String   // User-friendly badge identifier (e.g., 'first-tip') stored for easy lookup
-  awardedAt   DateTime @default(now())
-  revokedAt   DateTime?
-  metadata    Json     @default("{}")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  
+  badgeId         String
+  badge           Badge    @relation(fields: [badgeId], references: [id])
+  
+  // Blockchain
+  transactionHash String?
+  tokenId         String?  // NFT token ID
+  
+  // Metadata
+  earnedAt        DateTime @default(now())
+  context         Json?    // { tipId: "...", reason: "..." }
+  
+  // Indexes
   @@unique([userId, badgeId])
   @@index([userId])
   @@index([badgeId])
-  @@index([badgeInternalId])
-  @@index([awardedAt])
+  @@index([earnedAt])
 }
 
-model Content {
-  id                String            @id @default(uuid())
-  creatorId         String
-  creator           User              @relation("ContentCreator", fields: [creatorId], references: [id])
-  title             String
-  description       String?
-  contentText       String?           // AI-generated text content
-  contentHash       String?           // IPFS hash of content
-  contentType       String            @default("TEXT") // TEXT, IMAGE, VIDEO, AUDIO, etc.
-  isAI              Boolean           @default(true)
-  aiModel           String?           // Which AI model generated this
-  qualityScore      Float?            // AI-assessed quality score (0-1)
-  monetizationType  String            @default("TIP") // TIP, SUBSCRIPTION, PAY_PER_VIEW, FREE
-  price             String?           // Price for subscription/pay-per-view (in token)
-  token             String?           // Token for pricing
-  totalEarnings     String            @default("0") // Total earnings from this content
-  totalTips         Int               @default(0) // Number of tips received
-  viewCount         Int               @default(0)
-  engagementScore   Float             @default(0) // Calculated engagement score
-  isPublished       Boolean           @default(false)
-  isPremium         Boolean           @default(false) // Premium content flag
-  tips              Tip[]             @relation("ContentTips")
-  analytics         ContentAnalytics[] @relation("ContentAnalytics")
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
-
-  @@index([creatorId])
-  @@index([isPublished])
-  @@index([qualityScore])
-  @@index([totalEarnings])
+model Leaderboard {
+  id              String   @id @default(cuid())
+  period          Period   // DAILY, WEEKLY, MONTHLY, ALL_TIME
+  category        Category // TIPS_SENT, TIPS_RECEIVED, UNIQUE_TIPPERS
+  
+  // Rankings
+  rankings        Json     // Array of { userId, score, rank, change }
+  
+  // Period
+  periodStart     DateTime
+  periodEnd       DateTime
+  
+  // Timestamps
+  calculatedAt    DateTime @default(now())
+  
+  // Relationships
+  entries         LeaderboardEntry[]
+  
+  // Indexes
+  @@unique([period, category, periodStart])
+  @@index([period, category])
 }
 
-model ContentSubscription {
-  id           String   @id @default(uuid())
-  subscriberId String
-  subscriber   User     @relation("Subscriber", fields: [subscriberId], references: [id])
-  creatorId    String
-  creator      User     @relation("Creator", fields: [creatorId], references: [id])
-  token        String
-  amount       String   // Monthly subscription amount
-  status       String   @default("ACTIVE") // ACTIVE, CANCELLED, EXPIRED
-  startDate    DateTime @default(now())
-  endDate      DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  @@unique([subscriberId, creatorId])
-  @@index([creatorId])
-  @@index([subscriberId])
-}
-
-model ContentAnalytics {
-  id              String   @id @default(uuid())
-  contentId       String
-  content         Content  @relation("ContentAnalytics", fields: [contentId], references: [id], onDelete: Cascade)
-  date            DateTime @default(now())
-  views           Int      @default(0)
-  tips            Int      @default(0)
-  earnings        String   @default("0")
-  engagementScore Float    @default(0)
+model LeaderboardEntry {
+  id              String   @id @default(cuid())
+  leaderboardId   String
+  leaderboard     Leaderboard @relation(fields: [leaderboardId], references: [id])
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  
+  rank            Int
+  score           BigInt
+  change          Int      @default(0) // Change from previous period
+  
+  // Timestamps
   createdAt       DateTime @default(now())
-
-  @@index([contentId, date])
+  
+  @@unique([leaderboardId, userId])
+  @@index([userId])
+  @@index([rank])
 }
 
-model UserStats {
-  userId       String   @id
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tipsSent     Int      @default(0)
-  tipsReceived Int      @default(0)
-  amountSent   BigInt   @default(0n)
-  amountRecv   BigInt   @default(0n)
-  rankGlobal   Int?
-  rankWeekly   Int?
-  updatedAt    DateTime @updatedAt
+enum Period {
+  DAILY
+  WEEKLY
+  MONTHLY
+  ALL_TIME
+}
 
-  @@index([rankGlobal])
-  @@index([rankWeekly])
+enum Category {
+  TIPS_SENT
+  TIPS_RECEIVED
+  UNIQUE_TIPPERS
+  BADGE_COLLECTORS
+  COMMUNITY_FUNDERS
+}
+
+model GasSponsorship {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id])
+  
+  // Credits
+  totalCredits    Int      @default(5)
+  usedCredits     Int      @default(0)
+  remainingCredits Int
+  
+  // Daily limits
+  dailyUsed       Int      @default(0)
+  dailyLimit      Int      @default(10)
+  
+  // Reset tracking
+  lastResetAt     DateTime @default(now())
+  nextResetAt     DateTime
+  
+  // Stats
+  totalSponsored  BigInt   @default(0) // Total gas sponsored in wei
+  
+  // Timestamps
+  updatedAt       DateTime @updatedAt
+  
+  @@index([remainingCredits])
+  @@index([nextResetAt])
+}
+
+model AIConversation {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  
+  // Context
+  context         Json     // { chatId, platform, metadata }
+  
+  // Messages
+  messages        Json     // Array of { role, content, timestamp }
+  
+  // AI State
+  aiModel         String   @default("gpt-4")
+  aiTemperature   Float    @default(0.7)
+  
+  // Metadata
+  lastMessageAt   DateTime @default(now())
+  isActive        Boolean  @default(true)
+  
+  // Indexes
+  @@index([userId])
+  @@index([lastMessageAt])
+}
+
+model VoiceCommand {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  
+  // Audio
+  audioUrl        String
+  transcript      String
+  confidence      Float
+  
+  // Command
+  intent          String   // TIP, STATS, LEADERBOARD, HELP
+  parameters      Json     // { recipient: "@alice", amount: 10 }
+  
+  // Processing
+  status          CommandStatus @default(PROCESSING)
+  result          Json?
+  error           String?
+  
+  // AI Metadata
+  model           String
+  processingTime  Int?     // in ms
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  processedAt     DateTime?
+  
+  @@index([userId])
+  @@index([intent])
+  @@index([createdAt])
+}
+
+enum CommandStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model WebhookEvent {
+  id              String   @id @default(cuid())
+  
+  // Source
+  source          String   // VERYCHAT, BLOCKCHAIN, AI_SERVICE
+  eventType       String
+  payload         Json
+  
+  // Processing
+  status          WebhookStatus @default(PENDING)
+  attempts        Int      @default(0)
+  lastAttemptAt   DateTime?
+  error           String?
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  processedAt     DateTime?
+  
+  @@index([source])
+  @@index([eventType])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum WebhookStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  RETRY
 }

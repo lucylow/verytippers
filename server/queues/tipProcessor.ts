@@ -87,7 +87,7 @@ async function generateAIInsights(userId: string): Promise<void> {
 /**
  * Production worker with retries + dead letter queue
  */
-export const tipProcessorWorker = new Worker(
+const tipProcessorWorker = new Worker(
     'tip-processing',
     async (job: Job<TipJobData>) => {
         const { senderId, recipientId, amount, ipfsCid, signature, metaTxData, moderation } = job.data;
@@ -98,43 +98,42 @@ export const tipProcessorWorker = new Worker(
             // 1. Submit meta-transaction to relayer
             const txHash = await submitMetaTransaction(signature, metaTxData);
 
-            // 2. Update database
-            await prisma.tip.update({
-                where: { ipfsCid },
-                data: {
-                    txHash,
-                    status: 'PROCESSED',
-                    moderation: moderation || null
+            // 2. Update database - find tip by transactionHash or create if not exists
+            await prisma.tip.upsert({
+                where: { transactionHash: txHash },
+                update: {
+                    status: 'CONFIRMED',
+                    confirmedAt: new Date()
+                },
+                create: {
+                    senderId,
+                    recipientId,
+                    tokenAddress: config.TIP_CONTRACT_ADDRESS || '',
+                    amount: amount.toString(),
+                    amountInWei: amount,
+                    transactionHash: txHash,
+                    status: 'CONFIRMED',
+                    confirmedAt: new Date()
                 }
             });
 
             // 3. Update leaderboards (Redis)
             await updateRedisLeaderboards(senderId, recipientId, amount);
 
-            // 4. Update UserStats
-            await prisma.userStats.upsert({
-                where: { userId: senderId },
-                update: {
-                    tipsSent: { increment: 1 },
-                    amountSent: { increment: amount }
-                },
-                create: {
-                    userId: senderId,
-                    tipsSent: 1,
-                    amountSent: amount
+            // 4. Update User stats directly on User model
+            await prisma.user.update({
+                where: { id: senderId },
+                data: {
+                    totalTipsSent: { increment: amount },
+                    updatedAt: new Date()
                 }
             });
 
-            await prisma.userStats.upsert({
-                where: { userId: recipientId },
-                update: {
-                    tipsReceived: { increment: 1 },
-                    amountRecv: { increment: amount }
-                },
-                create: {
-                    userId: recipientId,
-                    tipsReceived: 1,
-                    amountRecv: amount
+            await prisma.user.update({
+                where: { id: recipientId },
+                data: {
+                    totalTipsReceived: { increment: amount },
+                    updatedAt: new Date()
                 }
             });
 
@@ -150,12 +149,29 @@ export const tipProcessorWorker = new Worker(
         } catch (error: any) {
             console.error(`❌ Tip processing failed for job ${job.id}:`, error);
 
-            // Update status to FAILED
+            // Update status to FAILED - try to find by ipfsCid or transactionHash
             try {
-                await prisma.tip.update({
-                    where: { ipfsCid },
-                    data: { status: 'FAILED' }
+                // Try to find tip by any available identifier
+                const existingTip = await prisma.tip.findFirst({
+                    where: {
+                        OR: [
+                            { senderId },
+                            { recipientId }
+                        ]
+                    },
+                    orderBy: { createdAt: 'desc' },
+                    take: 1
                 });
+                
+                if (existingTip) {
+                    await prisma.tip.update({
+                        where: { id: existingTip.id },
+                        data: { 
+                            status: 'FAILED',
+                            errorReason: error.message
+                        }
+                    });
+                }
             } catch (dbError) {
                 console.error('Failed to update tip status in database:', dbError);
             }

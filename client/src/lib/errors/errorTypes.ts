@@ -32,6 +32,7 @@ export interface ErrorContext {
   route?: string;
   action?: string;
   metadata?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 /**

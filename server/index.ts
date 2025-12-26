@@ -11,6 +11,7 @@ import { AITipSuggestionService } from './services/AITipSuggestionService';
 import { BadgeService } from './services/BadgeService';
 import { LeaderboardInsightsService } from './services/LeaderboardInsightsService';
 import { ModerationService } from './services/ModerationService';
+import { ModerationPipeline } from './services/moderationPipeline';
 import { config } from './config';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -25,6 +26,7 @@ const leaderboardInsightsService = new LeaderboardInsightsService();
 const aiTipSuggestionService = new AITipSuggestionService();
 const aiService = new AIService();
 const moderationService = new ModerationService();
+const moderationPipeline = new ModerationPipeline();
 
 async function startServer() {
     const app = express();
@@ -49,7 +51,7 @@ async function startServer() {
         });
     });
 
-    // Moderation API endpoint for real-time message checking
+    // Moderation API endpoint for real-time message checking (uses production pipeline)
     app.post('/api/v1/moderation/check', async (req: Request, res: Response) => {
         const { message, senderId, recipientId, context } = req.body;
 
@@ -58,12 +60,13 @@ async function startServer() {
         }
 
         try {
-            const result = await moderationService.moderateTipMessage(
-                message,
-                senderId,
+            // Use production moderation pipeline
+            const result = await moderationPipeline.processTipMessage(message, {
+                senderId: senderId || 'unknown',
                 recipientId,
-                context
-            );
+                channel: context?.channel,
+                recentTips: context?.recentTips
+            });
             
             res.status(200).json({
                 success: true,
@@ -71,18 +74,32 @@ async function startServer() {
             });
         } catch (error) {
             console.error('Error checking moderation:', error);
-            res.status(500).json({ 
-                success: false, 
-                message: 'Failed to check message moderation',
-                result: {
-                    isSafe: true,
-                    sentiment: 'neutral',
-                    toxicityScore: 0,
-                    toxicityLabels: [],
-                    flaggedReason: null,
-                    action: 'allow'
-                }
-            });
+            // Fallback to basic moderation service
+            try {
+                const fallbackResult = await moderationService.moderateTipMessage(
+                    message,
+                    senderId,
+                    recipientId,
+                    context
+                );
+                res.status(200).json({
+                    success: true,
+                    result: fallbackResult
+                });
+            } catch (fallbackError) {
+                res.status(500).json({ 
+                    success: false, 
+                    message: 'Failed to check message moderation',
+                    result: {
+                        isSafe: true,
+                        sentiment: 'neutral',
+                        toxicityScore: 0,
+                        toxicityLabels: [],
+                        flaggedReason: null,
+                        action: 'allow'
+                    }
+                });
+            }
         }
     });
 

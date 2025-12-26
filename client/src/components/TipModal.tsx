@@ -24,6 +24,8 @@ export default function TipModal({ open, payload, onClose, onComplete, meId }: P
   if (!open || !payload) return null
 
   async function handleSign() {
+    if (!payload) return;
+    
     setLoading(true)
     setStep('signing')
     

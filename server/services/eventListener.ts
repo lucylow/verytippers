@@ -65,50 +65,50 @@ export class EventListener {
             try {
                 console.log(`📥 TipSent event received: ${from} -> ${to}, amount: ${amount}, cid: ${ipfsCid}`);
 
-                // Upsert tip in database
+                // Upsert tip in database using transactionHash as unique identifier
                 await prisma.tip.upsert({
-                    where: { ipfsCid },
+                    where: { transactionHash: event.transactionHash },
                     update: {
-                        txHash: event.transactionHash,
-                        status: 'PROCESSED',
-                        updatedAt: new Date()
+                        status: 'CONFIRMED',
+                        confirmedAt: new Date()
                     },
                     create: {
                         senderId: from.toLowerCase(),
                         recipientId: to.toLowerCase(),
-                        amount: amount,
-                        ipfsCid: ipfsCid,
-                        txHash: event.transactionHash,
-                        status: 'PROCESSED'
+                        tokenAddress: config.TIP_CONTRACT_ADDRESS || '',
+                        amount: amount.toString(),
+                        amountInWei: amount,
+                        transactionHash: event.transactionHash,
+                        tipId: Number(tipId),
+                        status: 'CONFIRMED',
+                        confirmedAt: new Date()
                     }
                 });
 
-                // Update UserStats
-                await prisma.userStats.upsert({
-                    where: { userId: from.toLowerCase() },
-                    update: {
-                        tipsSent: { increment: 1 },
-                        amountSent: { increment: amount },
-                        updatedAt: new Date()
+                // Update User stats directly on User model
+                await prisma.user.updateMany({
+                    where: { 
+                        OR: [
+                            { walletAddress: from.toLowerCase() },
+                            { id: from.toLowerCase() }
+                        ]
                     },
-                    create: {
-                        userId: from.toLowerCase(),
-                        tipsSent: 1,
-                        amountSent: amount
+                    data: {
+                        totalTipsSent: { increment: amount },
+                        updatedAt: new Date()
                     }
                 });
 
-                await prisma.userStats.upsert({
-                    where: { userId: to.toLowerCase() },
-                    update: {
-                        tipsReceived: { increment: 1 },
-                        amountRecv: { increment: amount },
-                        updatedAt: new Date()
+                await prisma.user.updateMany({
+                    where: { 
+                        OR: [
+                            { walletAddress: to.toLowerCase() },
+                            { id: to.toLowerCase() }
+                        ]
                     },
-                    create: {
-                        userId: to.toLowerCase(),
-                        tipsReceived: 1,
-                        amountRecv: amount
+                    data: {
+                        totalTipsReceived: { increment: amount },
+                        updatedAt: new Date()
                     }
                 });
 

@@ -7,9 +7,21 @@
     "dev": "vite --host",
     "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "start": "NODE_ENV=production node dist/index.js",
+    "start:api": "NODE_ENV=production node dist/index.js",
     "preview": "vite preview --host",
     "check": "tsc --noEmit",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:generate": "prisma generate",
+    "db:studio": "prisma studio",
+    "queue:workers": "node dist/queues/tipProcessor.js",
+    "event:listener": "node dist/services/eventListener.js",
+    "test": "hardhat test",
+    "test:contracts": "hardhat test test/TipRouter.test.ts",
+    "compile": "hardhat compile",
+    "deploy:testnet": "hardhat run scripts/deploy-testnet.ts --network veryTestnet",
+    "deploy:mainnet": "hardhat run scripts/deploy.ts --network very"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
