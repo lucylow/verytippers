@@ -357,15 +357,30 @@ verytippers/
 
 ---
 
+## 🚀 Quick Deploy (Lovable)
+
+1. **Open [Lovable.dev](https://lovable.dev)** and create a new project
+2. **Connect this repo** and set `LOVABLE_PROJECT_ID` in project settings
+3. **Configure environment variables** in Lovable dashboard:
+   - `VITE_APP_NETWORK_RPC` - Testnet RPC URL
+   - `VITE_APP_CHAIN_ID` - Chain ID (8889 for VERY testnet)
+   - `VITE_APP_RELAYER_URL` - Relayer endpoint (or use mock)
+   - `VITE_APP_CONTRACT_ADDRESS` - Deployed TipRouter address
+4. **Click "Share -> Publish"** to deploy
+
+For local development with relayer, see [Setup and Installation](#-setup-and-installation) below.
+
+---
+
 ## 🔧 Setup and Installation
 
 ### Prerequisites
 
 - **Node.js** (v18+)
-- **pnpm** (or npm/yarn)
-- **PostgreSQL** (v12+)
-- **Redis** (v6+) - For caching and job queues
-- **Hardhat/Foundry** (Optional) - For smart contract development
+- **npm** (v9+) or **pnpm**
+- **PostgreSQL** (v12+) - Optional for full backend
+- **Redis** (v6+) - Optional, for caching and job queues
+- **Hardhat** - For smart contract deployment
 
 ### Installation Steps
 
@@ -381,11 +396,26 @@ verytippers/
    ```
 
 3. **Configure environment variables**
+
+   Create `.env.local` in project root (see `.env.example` for template):
    ```bash
-   cp .env.example .env
+   # Frontend/Client Environment
+   VITE_APP_NETWORK_RPC=https://rpc.testnet.verychain.org
+   VITE_APP_CHAIN_ID=8889
+   VITE_APP_RELAYER_URL=http://localhost:8080
+   VITE_APP_CONTRACT_ADDRESS=0xYourTipRouterAddress
+   VITE_APP_WALLET_PROVIDER=local
    ```
 
-   **Required Environment Variables**:
+   For relayer service, create `relayer/.env`:
+   ```bash
+   RPC_URL=https://rpc.testnet.verychain.org
+   RELAYER_PRIVATE_KEY=0xYourTestnetPrivateKey
+   CONTRACT_ADDRESS=0xYourTipRouterAddress
+   PORT=8080
+   ```
+
+   **Backend Environment Variables** (if using full server):
 
    | Variable | Description | Example |
    |----------|-------------|---------|
@@ -415,9 +445,21 @@ verytippers/
    # Compile contracts
    npx hardhat compile
    
-   # Deploy to Very Chain
-   npx hardhat run scripts/deploy.js --network verychain
+   # Deploy to Very Chain testnet
+   RELAYER_SIGNER=0xYourRelayerAddress npx hardhat run scripts/deploy-testnet.ts --network veryTestnet
+   
+   # Or deploy to mainnet
+   npx hardhat run scripts/deploy.ts --network very
    ```
+
+6. **Start the relayer service** (for gasless transactions)
+   ```bash
+   cd relayer
+   npm install
+   npm run dev
+   ```
+   
+   The relayer will run on `http://localhost:8080` by default.
 
 6. **Start the application**
 

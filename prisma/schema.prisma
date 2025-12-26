@@ -4,38 +4,51 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
-  id                 String                @id // Verychat User ID
-  walletAddress      String                @unique
-  publicKey          String
-  tipsSent           Tip[]                 @relation("TipsSent")
-  tipsReceived       Tip[]                 @relation("TipsReceived")
+  id                 String                @id @default(uuid())
+  walletAddress      String?               @unique
+  username           String?               @unique
+  displayName        String?
+  avatarUrl          String?
+  publicKey          String?
+  tipsSent           Tip[]                 @relation("Sender")
+  tipsReceived       Tip[]                 @relation("Recipient")
   content            Content[]             @relation("ContentCreator")
   subscriptions      ContentSubscription[] @relation("Subscriber")
   creatorSubscriptions ContentSubscription[] @relation("Creator")
   badges             UserBadge[]           @relation("UserBadges")
+  stats              UserStats?
   createdAt          DateTime              @default(now())
   updatedAt          DateTime              @updatedAt
 }
 
 model Tip {
-  id            String   @id @default(uuid())
-  senderId      String
-  sender        User     @relation("TipsSent", fields: [senderId], references: [id])
-  recipientId   String
-  recipient     User     @relation("TipsReceived", fields: [recipientId], references: [id])
-  contentId     String?  // Link tip to specific content
-  content       Content? @relation("ContentTips", fields: [contentId], references: [id])
-  amount        String
-  token         String
-  message       String?
-  messageHash   String?  // IPFS hash
-  txHash        String?  @unique
-  status        String   @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id             String    @id @default(uuid())
+  senderId       String
+  recipientId    String
+  amount         BigInt
+  ipfsCid        String    @unique
+  moderation     Json?
+  txHash         String?   @unique
+  status         TipStatus @default(PENDING)
+  sender         User      @relation("Sender", fields: [senderId], references: [id])
+  recipient      User      @relation("Recipient", fields: [recipientId], references: [id])
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([senderId])
+  @@index([recipientId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum TipStatus {
+  PENDING
+  PROCESSED
+  FAILED
 }
 
 model Badge {
@@ -139,4 +152,19 @@ model ContentAnalytics {
   createdAt       DateTime @default(now())
 
   @@index([contentId, date])
+}
+
+model UserStats {
+  userId       String   @id
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tipsSent     Int      @default(0)
+  tipsReceived Int      @default(0)
+  amountSent   BigInt   @default(0n)
+  amountRecv   BigInt   @default(0n)
+  rankGlobal   Int?
+  rankWeekly   Int?
+  updatedAt    DateTime @updatedAt
+
+  @@index([rankGlobal])
+  @@index([rankWeekly])
 }

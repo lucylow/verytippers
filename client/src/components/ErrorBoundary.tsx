@@ -1,6 +1,8 @@
 import { cn } from "@/lib/utils";
 import { AlertTriangle, RotateCcw, Home } from "lucide-react";
 import { Component, ReactNode, ErrorInfo } from "react";
+import { categorizeError } from "@/lib/errors/errorTypes";
+import { errorLogger } from "@/lib/errors/errorLogger";
 
 interface Props {
   children: ReactNode;
@@ -25,24 +27,16 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Enhanced error logging
-    const errorDetails = {
-      message: error.message,
-      stack: error.stack,
-      componentStack: errorInfo.componentStack,
-      timestamp: new Date().toISOString(),
-      userAgent: navigator.userAgent,
-      url: window.location.href,
-    };
+    // Enhanced error logging with categorization
+    const categorizedError = categorizeError(error, {
+      route: window.location.pathname,
+      action: "error_boundary",
+      metadata: {
+        componentStack: errorInfo.componentStack,
+      },
+    });
 
-    // Log error to console in development
-    if (import.meta.env.DEV) {
-      console.error("ErrorBoundary caught an error:", error, errorInfo);
-      console.error("Error details:", errorDetails);
-    } else {
-      // In production, log minimal info
-      console.error("ErrorBoundary caught an error:", error.message);
-    }
+    errorLogger.log(categorizedError);
 
     // Store error info for display
     this.setState({ errorInfo });
@@ -55,16 +49,6 @@ class ErrorBoundary extends Component<Props, State> {
         console.error("Error in error reporting handler:", reportingError);
       }
     }
-
-    // In production, you might want to send to an error reporting service
-    // Example: Sentry.captureException(error, { contexts: { react: errorInfo } });
-    // Example with error details:
-    // if (import.meta.env.PROD) {
-    //   Sentry.captureException(error, {
-    //     contexts: { react: errorInfo },
-    //     extra: errorDetails,
-    //   });
-    // }
   }
 
   handleReset = () => {
@@ -103,18 +87,21 @@ class ErrorBoundary extends Component<Props, State> {
       const isDevelopment = import.meta.env.DEV;
 
       return (
-        <div className="flex items-center justify-center min-h-screen p-8 bg-background">
+        <div
+          className="flex items-center justify-center min-h-screen p-8 bg-background"
+          role="alert"
+          aria-live="assertive"
+        >
           <div className="flex flex-col items-center w-full max-w-2xl p-8 space-y-6">
             <AlertTriangle
               size={48}
               className="text-destructive mb-2 flex-shrink-0"
+              aria-hidden="true"
             />
 
             <div className="text-center space-y-2">
               <h2 className="text-2xl font-bold">Something went wrong</h2>
-              <p className="text-muted-foreground">
-                {errorMessage}
-              </p>
+              <p className="text-muted-foreground">{errorMessage}</p>
             </div>
 
             {isDevelopment && this.state.error && (
@@ -159,8 +146,9 @@ class ErrorBoundary extends Component<Props, State> {
                   "bg-primary text-primary-foreground",
                   "hover:opacity-90 transition-opacity cursor-pointer"
                 )}
+                aria-label="Try again"
               >
-                <RotateCcw size={16} />
+                <RotateCcw size={16} aria-hidden="true" />
                 Try Again
               </button>
               <button
@@ -170,8 +158,9 @@ class ErrorBoundary extends Component<Props, State> {
                   "bg-secondary text-secondary-foreground",
                   "hover:opacity-90 transition-opacity cursor-pointer"
                 )}
+                aria-label="Go to home page"
               >
-                <Home size={16} />
+                <Home size={16} aria-hidden="true" />
                 Go Home
               </button>
               <button
@@ -181,8 +170,9 @@ class ErrorBoundary extends Component<Props, State> {
                   "border border-border",
                   "hover:bg-accent transition-colors cursor-pointer"
                 )}
+                aria-label="Reload page"
               >
-                <RotateCcw size={16} />
+                <RotateCcw size={16} aria-hidden="true" />
                 Reload Page
               </button>
             </div>

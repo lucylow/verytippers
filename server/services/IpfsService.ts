@@ -1,6 +1,7 @@
 import { create, IPFSHTTPClient } from 'ipfs-http-client';
 import { config } from '../config';
 import axios from 'axios';
+import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
 
 export type IpfsProvider = 'infura' | 'pinata';
 
@@ -215,5 +216,109 @@ export class IpfsService {
      */
     getProvider(): IpfsProvider {
         return this.provider;
+    }
+
+    /**
+     * Encrypt and pin message to IPFS (Production)
+     * Uses AES-256-GCM encryption before uploading to IPFS
+     */
+    static async encryptAndPin(message: string, ipfsService: IpfsService): Promise<string> {
+        const encryptionKey = process.env.ENCRYPTION_KEY;
+        
+        if (!encryptionKey) {
+            console.warn('ENCRYPTION_KEY not set, uploading unencrypted');
+            return await ipfsService.upload(message);
+        }
+
+        // Generate IV (Initialization Vector)
+        const iv = randomBytes(16);
+        const key = Buffer.from(encryptionKey, 'hex');
+
+        if (key.length !== 32) {
+            throw new Error('ENCRYPTION_KEY must be 64 hex characters (32 bytes)');
+        }
+
+        // Create cipher with AES-256-GCM
+        const cipher = createCipheriv('aes-256-gcm', key, iv);
+
+        // Encrypt the message
+        const encrypted = Buffer.concat([
+            cipher.update(message, 'utf8'),
+            cipher.final()
+        ]);
+
+        // Get authentication tag (required for GCM)
+        const authTag = cipher.getAuthTag();
+
+        // Create payload with IV, encrypted data, and auth tag
+        const payload = {
+            iv: iv.toString('hex'),
+            data: encrypted.toString('hex'),
+            tag: authTag.toString('hex'),
+            timestamp: Date.now()
+        };
+
+        // Pin to IPFS
+        const cid = await ipfsService.upload(JSON.stringify(payload));
+        
+        // Extract CID from ipfs:// prefix if present
+        return cid.replace('ipfs://', '');
+    }
+
+    /**
+     * Retrieve and decrypt message from IPFS (Production)
+     */
+    static async retrieveAndDecrypt(ipfsCid: string, ipfsService: IpfsService): Promise<string> {
+        const encryptionKey = process.env.ENCRYPTION_KEY;
+
+        // Fetch from IPFS
+        const rawData = await ipfsService.fetch(ipfsCid);
+        let payload: any;
+
+        try {
+            payload = JSON.parse(rawData);
+        } catch (error) {
+            // If it's not JSON, might be unencrypted legacy data
+            if (!encryptionKey) {
+                return rawData;
+            }
+            throw new Error('Failed to parse encrypted payload from IPFS');
+        }
+
+        // Check if payload has encryption fields
+        if (!payload.iv || !payload.data || !payload.tag) {
+            // Unencrypted legacy data
+            if (!encryptionKey) {
+                return rawData;
+            }
+            throw new Error('Payload missing encryption fields');
+        }
+
+        if (!encryptionKey) {
+            throw new Error('ENCRYPTION_KEY required to decrypt but not set');
+        }
+
+        const key = Buffer.from(encryptionKey, 'hex');
+        if (key.length !== 32) {
+            throw new Error('ENCRYPTION_KEY must be 64 hex characters (32 bytes)');
+        }
+
+        // Create decipher
+        const decipher = createDecipheriv(
+            'aes-256-gcm',
+            key,
+            Buffer.from(payload.iv, 'hex')
+        );
+
+        // Set authentication tag (required for GCM)
+        decipher.setAuthTag(Buffer.from(payload.tag, 'hex'));
+
+        // Decrypt
+        const decrypted = Buffer.concat([
+            decipher.update(Buffer.from(payload.data, 'hex')),
+            decipher.final()
+        ]);
+
+        return decrypted.toString('utf8');
     }
 }

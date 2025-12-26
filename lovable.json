@@ -1,0 +1,15 @@
+{
+  "name": "verytippers",
+  "public": true,
+  "build": {
+    "command": "npm run build",
+    "publish": "dist/public"
+  },
+  "env": {
+    "VITE_APP_NETWORK_RPC": "https://rpc.testnet.verychain.org",
+    "VITE_APP_CHAIN_ID": "8889",
+    "VITE_APP_RELAYER_URL": "http://localhost:8080",
+    "VITE_APP_WALLET_PROVIDER": "local"
+  }
+}
+

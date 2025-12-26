@@ -50,4 +50,7 @@ export const config = {
     // OpenAI
     OPENAI_API_KEY: process.env.OPENAI_API_KEY || '',
     OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+
+    // Encryption
+    ENCRYPTION_KEY: process.env.ENCRYPTION_KEY || '', // 64 hex characters (32 bytes) for AES-256
 };
