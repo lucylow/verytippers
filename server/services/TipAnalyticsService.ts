@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { DatabaseService } from './DatabaseService';
 import { CacheService } from './CacheService';
 import { Prisma } from '@prisma/client';

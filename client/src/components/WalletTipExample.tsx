@@ -3,7 +3,7 @@
  * Demonstrates wallet-agnostic meta-transaction signing
  */
 
-import { useWallet } from "@/contexts/WalletContext";
+import { useWallet } from "@/wallet/WalletContext";
 import { signMetaTx } from "@/lib/signMetaTx";
 import { buildMetaTx } from "@/lib/web3/metaTx";
 import { ensureChainCompatibility } from "@/wallet";
@@ -22,7 +22,10 @@ export function WalletTipExample({
   amount,
   messageCid,
 }: WalletTipExampleProps) {
-  const { wallet, isConnected, address, connect } = useWallet();
+  const walletContext = useWallet();
+  const { isConnected, address } = walletContext;
+  const wallet = walletContext.wallet;
+  const connect = walletContext.connect;
   const [isProcessing, setIsProcessing] = useState(false);
 
   const handleTip = async () => {

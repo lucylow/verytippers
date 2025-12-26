@@ -73,7 +73,7 @@ export function usePeerConnection({
 
     pc.onconnectionstatechange = () => {
       const state = pc.connectionState;
-      setConnected(state === 'connected' || state === 'completed');
+      setConnected(state === 'connected');
       onConnectionState?.(state);
     };
 

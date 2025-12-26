@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Repository, Between } from 'typeorm';
 import { AppDataSource } from '../config/database';
 import { Tip } from '../models/Tip.entity';

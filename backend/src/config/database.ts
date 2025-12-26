@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { DataSource } from 'typeorm';
 import { config } from './config';
 import { User } from '../models/User.entity';

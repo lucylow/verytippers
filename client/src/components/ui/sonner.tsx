@@ -16,10 +16,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
         } as React.CSSProperties
       }
       toastOptions={{
-        // Enhanced accessibility for toasts
-        role: 'alert',
-        'aria-live': 'assertive',
-        'aria-atomic': true,
+        classNames: {
+          toast: 'group toast',
+        },
       }}
       {...props}
     />

@@ -114,12 +114,12 @@ export function WalletProvider({ children }: WalletProviderProps) {
       wallet.getChainId().then(setChainId).catch(console.error);
     };
 
-    window.ethereum.on("accountsChanged", handleAccountsChanged);
+    window.ethereum.on("accountsChanged", handleAccountsChanged as (...args: unknown[]) => void);
     window.ethereum.on("chainChanged", handleChainChanged);
 
     return () => {
       if (window.ethereum) {
-        window.ethereum.removeListener("accountsChanged", handleAccountsChanged);
+        window.ethereum.removeListener("accountsChanged", handleAccountsChanged as (...args: unknown[]) => void);
         window.ethereum.removeListener("chainChanged", handleChainChanged);
       }
     };

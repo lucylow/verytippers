@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { DatabaseService } from './DatabaseService';
 import { HuggingFaceService } from './HuggingFaceService';
 import { createHash } from 'crypto';

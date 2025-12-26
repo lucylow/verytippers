@@ -19,7 +19,7 @@ export class WepinAdapter implements WalletAdapter {
     this.wepinWallet = new WepinWallet();
     
     // Set up event listeners for account changes
-    this.wepinWallet.on('accountChanged', (account) => {
+    this.wepinWallet.on('accountChanged', (account: { address: string; chainId: number } | null) => {
       if (account) {
         this.account = {
           address: account.address,
@@ -30,7 +30,7 @@ export class WepinAdapter implements WalletAdapter {
       }
     });
 
-    this.wepinWallet.on('error', (error) => {
+    this.wepinWallet.on('error', (error: Error) => {
       console.error('Wepin adapter error:', error);
     });
   }

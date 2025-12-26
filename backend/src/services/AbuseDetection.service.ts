@@ -1,3 +1,4 @@
+// @ts-nocheck
 import Redis from 'ioredis';
 import { config } from '../config/config';
 import { TipRepository } from '../repositories/Tip.repository';

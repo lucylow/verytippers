@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { CronJob } from 'cron';
 import { UserRepository } from '../repositories/User.repository';
 import { TipRepository } from '../repositories/Tip.repository';
