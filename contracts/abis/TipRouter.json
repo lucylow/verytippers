@@ -1,0 +1,13 @@
+[
+  "function submitTip(address from, address to, uint256 amount, bytes32 cidHash, uint256 nonce, uint8 v, bytes32 r, bytes32 s) external",
+  "function isNonceUsed(bytes32 messageHash) external view returns (bool isUsed)",
+  "function getMessageHash(address from, address to, uint256 amount, bytes32 cidHash, uint256 nonce) external pure returns (bytes32)",
+  "function contractInfo() external view returns (uint256 version, address relayer, uint256 totalTipsCount)",
+  "function relayerSigner() external view returns (address)",
+  "function nonceUsed(bytes32) external view returns (bool)",
+  "function totalTips() external view returns (uint256)",
+  "function VERSION() external view returns (uint256)",
+  "event TipSubmitted(bytes32 indexed cidHash, address indexed from, address indexed to, uint256 amount, uint256 nonce)",
+  "event RelayerSignerUpdated(address oldSigner, address newSigner)"
+]
+

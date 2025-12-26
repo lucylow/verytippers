@@ -49,6 +49,10 @@ export function useAuth() {
     if (error) throw error;
   };
 
-  return { user, loading, signIn, signUp, signOut };
+  const getCurrentUser = () => {
+    return user;
+  };
+
+  return { user, loading, signIn, signUp, signOut, getCurrentUser };
 }
 

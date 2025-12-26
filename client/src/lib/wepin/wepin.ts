@@ -56,6 +56,7 @@ export class WepinWallet {
 
     try {
       // Dynamic import to avoid errors if SDK not installed
+      // @ts-ignore - Optional dependency, may not be installed
       const WepinSDK = await import('@wepin/sdk-js').catch(() => null);
       
       if (!WepinSDK) {

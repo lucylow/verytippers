@@ -55,4 +55,11 @@ export const config = {
 
     // Encryption
     ENCRYPTION_KEY: process.env.ENCRYPTION_KEY || '', // 64 hex characters (32 bytes) for AES-256
+
+    // Supabase
+    SUPABASE: {
+        URL: process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '',
+        SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+        ANON_KEY: process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || ''
+    }
 };

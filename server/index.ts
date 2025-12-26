@@ -15,6 +15,8 @@ import { ModerationPipeline } from './services/moderationPipeline';
 import { NFTService } from './services/NFTService';
 import { config } from './config';
 import adsRouter from './routes/ads';
+import indexerWebhookRouter from './routes/indexerWebhook';
+import checkoutRouter from './routes/checkout';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,6 +37,9 @@ async function startServer() {
     const app = express();
     const server = createServer(app);
 
+    // Configure body parser - must be before routes
+    // Stripe webhook needs raw body for signature verification
+    app.use('/api/checkout/stripe-webhook', express.raw({ type: 'application/json' }));
     app.use(express.json());
 
     // Trust proxy for accurate IP addresses
@@ -45,6 +50,12 @@ async function startServer() {
     // Ads API routes
     app.use('/api/ads', adsRouter);
     app.use('/api/admin', adsRouter);
+
+    // Supabase indexer webhook route
+    app.use('/api', indexerWebhookRouter);
+
+    // Checkout & monetization routes
+    app.use('/api/checkout', checkoutRouter);
 
     // Health Check Endpoint
     app.get('/health', (_req: Request, res: Response) => {

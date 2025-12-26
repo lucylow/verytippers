@@ -44,7 +44,8 @@ export default function TipComposer({ toUserId, toUsername, onTipCreated }: Prop
   async function createTip() {
     setLoading(true);
     try {
-      const currentUser = supabase.auth.user();
+      const { data: { session } } = await supabase.auth.getSession();
+      const currentUser = session?.user;
       if (!currentUser) {
         toast.error('Please sign in to create a tip');
         return;

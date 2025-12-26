@@ -1,0 +1,78 @@
+{
+  "users": [
+    {
+      "id": "11111111-1111-1111-1111-111111111111",
+      "username": "alice",
+      "display_name": "Alice",
+      "wallet_address": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0",
+      "avatar_url": "https://api.dicebear.com/7.x/avataaars/svg?seed=alice"
+    },
+    {
+      "id": "22222222-2222-2222-2222-222222222222",
+      "username": "bob",
+      "display_name": "Bob",
+      "wallet_address": "0x8ba1f109551bD432803012645Hac136c22C1779",
+      "avatar_url": "https://api.dicebear.com/7.x/avataaars/svg?seed=bob"
+    },
+    {
+      "id": "33333333-3333-3333-3333-333333333333",
+      "username": "charlie",
+      "display_name": "Charlie",
+      "wallet_address": "0x1234567890123456789012345678901234567890",
+      "avatar_url": "https://api.dicebear.com/7.x/avataaars/svg?seed=charlie"
+    }
+  ],
+  "ipfs_messages": [
+    {
+      "id": "c1c1c1c1-c1c1-c1c1-c1c1-c1c1c1c1c1c1",
+      "cid": "QmDemoCid1",
+      "encrypted": true,
+      "length": 150,
+      "author_id": "11111111-1111-1111-1111-111111111111"
+    },
+    {
+      "id": "c2c2c2c2-c2c2-c2c2-c2c2-c2c2c2c2c2c2",
+      "cid": "QmDemoCid2",
+      "encrypted": true,
+      "length": 200,
+      "author_id": "22222222-2222-2222-2222-222222222222"
+    }
+  ],
+  "tips": [
+    {
+      "id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      "from_user": "11111111-1111-1111-1111-111111111111",
+      "to_user": "22222222-2222-2222-2222-222222222222",
+      "amount": "5.0",
+      "cid_id": "c1c1c1c1-c1c1-c1c1-c1c1-c1c1c1c1c1c1",
+      "status": "pending",
+      "chain_network": "very-testnet"
+    },
+    {
+      "id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+      "from_user": "22222222-2222-2222-2222-222222222222",
+      "to_user": "33333333-3333-3333-3333-333333333333",
+      "amount": "10.5",
+      "cid_id": "c2c2c2c2-c2c2-c2c2-c2c2-c2c2c2c2c2c2",
+      "status": "confirmed",
+      "relayer_tx_hash": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+      "confirmations": 12,
+      "chain_network": "very-testnet"
+    }
+  ],
+  "leaderboards": [
+    {
+      "user_id": "22222222-2222-2222-2222-222222222222",
+      "total_received": "5.0",
+      "tip_count": 1,
+      "last_tip_at": "2024-01-15T10:30:00Z"
+    },
+    {
+      "user_id": "33333333-3333-3333-3333-333333333333",
+      "total_received": "10.5",
+      "tip_count": 1,
+      "last_tip_at": "2024-01-15T11:00:00Z"
+    }
+  ]
+}
+

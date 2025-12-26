@@ -106,6 +106,8 @@ export class NFTService {
             throw new Error('NFT contract not configured. Set NFT_CONTRACT_ADDRESS in .env');
         }
 
+        const nftContract = this.nftContract; // Store for TypeScript narrowing
+
         // Create metadata
         const metadata: NFTMetadata = {
             name: request.name,
@@ -119,14 +121,14 @@ export class NFTService {
         const tokenURI = await this.createMetadata(metadata);
 
         // Mint NFT via contract
-        const tx = await this.nftContract.mintTo(request.toAddress, tokenURI);
+        const tx = await nftContract.mintTo(request.toAddress, tokenURI);
         const receipt = await tx.wait();
 
         // Extract tokenId from event
         const mintEvent = receipt.logs.find((log: any) => {
             try {
-                const parsed = this.nftContract.interface.parseLog(log);
-                return parsed?.name === 'Minted';
+                const parsed = nftContract.interface.parseLog(log);
+                return parsed !== null && parsed.name === 'Minted';
             } catch {
                 return false;
             }
@@ -134,8 +136,11 @@ export class NFTService {
 
         let tokenId: number;
         if (mintEvent) {
-            const parsed = this.nftContract.interface.parseLog(mintEvent);
-            tokenId = Number(parsed?.args.tokenId);
+            const parsed = nftContract.interface.parseLog(mintEvent);
+            if (!parsed) {
+                throw new Error('Could not parse mint event');
+            }
+            tokenId = Number(parsed.args.tokenId);
         } else {
             // Fallback: query the contract or use a workaround
             throw new Error('Could not extract tokenId from mint event');
@@ -145,10 +150,10 @@ export class NFTService {
         await prisma.nFT.create({
             data: {
                 tokenId: BigInt(tokenId),
-                contract: this.nftContract.target as string,
+                contract: nftContract.target as string,
                 owner: request.toAddress.toLowerCase(),
                 tokenURI: tokenURI,
-                metadata: metadata
+                metadata: metadata as any
             }
         });
 

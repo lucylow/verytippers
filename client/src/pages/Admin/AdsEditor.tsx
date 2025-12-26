@@ -21,6 +21,8 @@ interface Ad {
   url: string;
   budget: number;
   active: boolean;
+  impressions?: number;
+  clicks?: number;
 }
 
 export default function AdsEditor() {

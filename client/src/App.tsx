@@ -13,6 +13,8 @@ import DAO from "./pages/DAO";
 import TipDemo from "./pages/TipDemo";
 import MockDemo from "./pages/MockDemo";
 import NFTMarketplace from "./pages/NFTMarketplace";
+import CheckoutSuccess from "./pages/CheckoutSuccess";
+import CheckoutCancel from "./pages/CheckoutCancel";
 import { VoiceTippingButton } from "./components/VoiceTippingButton";
 import { NetworkSelector } from "./components/NetworkSelector";
 
@@ -200,6 +202,12 @@ function Router() {
       </Route>
       <Route path="/nft">
         <NFTMarketplace />
+      </Route>
+      <Route path="/checkout/success">
+        <CheckoutSuccess />
+      </Route>
+      <Route path="/checkout/cancel">
+        <CheckoutCancel />
       </Route>
       <Route path="/404">
         <NotFound />
