@@ -9,6 +9,7 @@ This project uses **wouter** for client-side routing. All pages are accessible t
 - `/dao` - DAO Governance page
 - `/nft` - NFT Marketplace page
 - `/demo` - Live Demo page
+- `/mock-demo` - Mock Demo page
 - `/p2p` - P2P Demo page
 - `/tokens` - Token Ecosystem page
 - `/verychain` - Verychain page
@@ -16,6 +17,7 @@ This project uses **wouter** for client-side routing. All pages are accessible t
 ### Other Routes
 - `/checkout/success` - Checkout success page
 - `/checkout/cancel` - Checkout cancel page
+- `/admin/ads` - Admin Ads Editor page
 - `/404` - Not found page
 
 ## Navigation

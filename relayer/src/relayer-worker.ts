@@ -9,7 +9,7 @@
  */
 
 import Redis from 'ioredis';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseClient } from '../lib/supabase';
 import { KMSClient, SignCommand } from '@aws-sdk/client-kms';
 import { ethers } from 'ethers';
 import fs from 'fs';
@@ -28,11 +28,8 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 const redis = new Redis(redisUrl);
 
-const supabaseUrl = process.env.SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseKey, {
-  auth: { persistSession: false }
-});
+// Initialize Supabase (centralized client)
+const supabase = getSupabaseClient();
 
 // AWS KMS configuration
 const kmsClient = process.env.KMS_KEY_ID ? new KMSClient({ 

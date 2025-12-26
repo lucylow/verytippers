@@ -1,16 +1,7 @@
-import { createClient } from '@supabase/supabase-js';
-import { config } from '../../config';
+import { getSupabaseClient } from '../../lib/supabase';
 
-const url = process.env.SUPABASE_URL || config.SUPABASE?.URL || '';
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || config.SUPABASE?.SERVICE_ROLE_KEY || '';
-
-if (!url || !serviceKey) {
-  console.warn('Supabase service role key not configured. MetaTx enqueueing will fail.');
-}
-
-const supabase = createClient(url, serviceKey, { 
-  auth: { persistSession: false } 
-});
+// Initialize Supabase (centralized client)
+const supabase = getSupabaseClient();
 
 /**
  * Enqueue a meta-transaction for relayer processing
@@ -19,9 +10,6 @@ const supabase = createClient(url, serviceKey, {
  * @returns The inserted queue record
  */
 export async function enqueueMetaTx(tipId: string, metaPayload: any) {
-  if (!url || !serviceKey) {
-    throw new Error('Supabase service role key not configured');
-  }
 
   // metaPayload could be { to, amount, cidHash, nonce, from, signature, etc. }
   const { data, error } = await supabase
@@ -59,9 +47,6 @@ export async function updateMetaTxStatus(
   status: 'queued' | 'processing' | 'done' | 'failed',
   error?: string
 ) {
-  if (!url || !serviceKey) {
-    throw new Error('Supabase service role key not configured');
-  }
 
   const updateData: any = { status };
   if (error) {

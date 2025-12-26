@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { loadStripe } from "@stripe/stripe-js";
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "@/lib/supabase";
 import { ethers } from "ethers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,9 +9,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || "");
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 interface CheckoutModalProps {
   userId: string;

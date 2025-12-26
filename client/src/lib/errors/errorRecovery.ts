@@ -47,7 +47,20 @@ class RouteRecoveryStrategy implements RecoveryStrategy {
       if (typeof window === "undefined") return false;
 
       const currentPath = window.location.pathname;
-      const validRoutes = ["/", "/dao", "/404"];
+      const validRoutes = [
+        "/", 
+        "/dao", 
+        "/demo", 
+        "/mock-demo", 
+        "/nft", 
+        "/p2p", 
+        "/verychain", 
+        "/checkout/success", 
+        "/checkout/cancel", 
+        "/tokens", 
+        "/admin/ads",
+        "/404"
+      ];
 
       if (!validRoutes.includes(currentPath)) {
         window.history.replaceState(null, "", "/");

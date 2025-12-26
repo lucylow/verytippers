@@ -296,3 +296,223 @@ export interface HealthCheckResponse {
   version?: string;
 }
 
+// Rewards API Types (Extended)
+export interface EvaluateRewardRequest {
+  actionType: string;
+  tipAmount?: number;
+  contentQualityScore?: number;
+  streakDays?: number;
+  referralVerified?: boolean;
+}
+
+export interface EvaluateRewardResponse {
+  success: boolean;
+  data?: {
+    eligible: boolean;
+    amount: string;
+    amountFormatted: string;
+    reason?: string;
+    error?: string;
+  };
+  error?: string;
+}
+
+export interface RewardInfoResponse {
+  success: boolean;
+  data?: {
+    contract: {
+      version: bigint;
+      token: string;
+      signer: string;
+      totalRewards: bigint;
+    };
+    signerAddress: string;
+  };
+  error?: string;
+}
+
+export interface RewardTableResponse {
+  success: boolean;
+  data?: {
+    rewardTable: Record<string, string>;
+    note?: string;
+  };
+  error?: string;
+}
+
+// Checkout API Types
+export interface CreateCheckoutSessionRequest {
+  userId: string;
+  credits: number;
+  success_url?: string;
+  cancel_url?: string;
+}
+
+export interface CreateCheckoutSessionResponse {
+  url?: string;
+  sessionId?: string;
+  error?: string;
+}
+
+export interface CreateMetaTxRequest {
+  userId: string;
+  toAddress: string;
+  amount: number;
+  cid?: string | null;
+  nonceHint?: number;
+  fromAddress?: string;
+  signature?: string;
+}
+
+export interface CreateMetaTxResponse {
+  queuedId?: string;
+  message?: string;
+  error?: string;
+}
+
+export interface UserBalanceResponse {
+  credits: number;
+  userId: string;
+  error?: string;
+}
+
+export interface Order {
+  id: string;
+  user_id: string;
+  amount_cents: number;
+  credits: number;
+  stripe_session_id: string;
+  status: 'pending' | 'paid' | 'failed';
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface UserOrdersResponse {
+  orders: Order[];
+  error?: string;
+}
+
+// Ads API Types
+export interface GetAdSlotRequest {
+  tags?: string[];
+  guild?: string;
+}
+
+export interface Ad {
+  id: string;
+  advertiser: string;
+  title: string;
+  description?: string;
+  imageUrl?: string;
+  targetTags?: string[];
+  targetGuild?: string;
+  url: string;
+  budget?: number;
+  active: boolean;
+  impressions?: number;
+  clicks?: number;
+}
+
+export interface AdSlotResponse {
+  ad: Ad | null;
+  error?: string;
+}
+
+export interface RecordImpressionRequest {
+  adId: string;
+  userId?: string;
+  ipHash?: string;
+}
+
+export interface RecordImpressionResponse {
+  ok?: boolean;
+  success: boolean;
+  error?: string;
+}
+
+export interface RecordClickRequest {
+  adId: string;
+  userId?: string;
+  ipHash?: string;
+}
+
+export interface RecordClickResponse {
+  redirectUrl: string;
+  success: boolean;
+  error?: string;
+}
+
+export interface CreateAdRequest {
+  advertiser: string;
+  title: string;
+  description?: string;
+  imageUrl?: string;
+  targetTags?: string[];
+  targetGuild?: string;
+  url: string;
+  budget?: number;
+}
+
+export interface CreateAdResponse {
+  success: boolean;
+  ad?: Ad;
+  error?: string;
+}
+
+export interface UpdateAdRequest {
+  advertiser?: string;
+  title?: string;
+  description?: string;
+  imageUrl?: string;
+  targetTags?: string[];
+  targetGuild?: string;
+  url?: string;
+  budget?: number;
+}
+
+export interface UpdateAdResponse {
+  success: boolean;
+  ad?: Ad;
+  error?: string;
+}
+
+export interface ListAdsResponse {
+  success: boolean;
+  ads?: Ad[];
+  error?: string;
+}
+
+// Voice API Types
+export interface VoiceParseRequest {
+  transcript: string;
+}
+
+export interface VoiceParseResponse {
+  success: boolean;
+  data?: {
+    recipient?: string;
+    amount?: number;
+    message?: string;
+    intent?: string;
+  };
+  error?: string;
+}
+
+// Intelligent Tip Suggestion Types
+export interface IntelligentTipSuggestionRequest {
+  chatContext: string;
+  recipientId?: string;
+  senderId?: string;
+  recipientName?: string;
+}
+
+export interface IntelligentTipSuggestionResponse {
+  success: boolean;
+  data?: {
+    amount?: number;
+    message?: string;
+    reasoning?: string;
+  };
+  error?: string;
+}
+

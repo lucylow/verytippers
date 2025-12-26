@@ -1,8 +1,7 @@
 // @ts-nocheck
 import express, { Request, Response } from 'express';
 import Stripe from 'stripe';
-import { createClient } from '@supabase/supabase-js';
-import { config } from '../config';
+import { getSupabaseClient } from '../lib/supabase';
 
 const router = express.Router();
 
@@ -11,17 +10,8 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
   apiVersion: '2024-11-20.acacia',
 });
 
-// Initialize Supabase
-const supabaseUrl = process.env.SUPABASE_URL || config.SUPABASE?.URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || config.SUPABASE?.SERVICE_ROLE_KEY || '';
-
-if (!supabaseUrl || !supabaseKey) {
-  console.warn('⚠️  Supabase credentials not configured. Checkout endpoints will fail.');
-}
-
-const supabase = createClient(supabaseUrl, supabaseKey, {
-  auth: { persistSession: false }
-});
+// Initialize Supabase (centralized client)
+const supabase = getSupabaseClient();
 
 // Initialize Redis (optional, for queue)
 let redis: any = null;

@@ -1,19 +1,10 @@
 import express, { Request, Response } from 'express';
-import { createClient } from '@supabase/supabase-js';
-import { config } from '../config';
+import { getSupabaseClient } from '../lib/supabase';
 
 const router = express.Router();
 
-const url = process.env.SUPABASE_URL || config.SUPABASE?.URL || '';
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || config.SUPABASE?.SERVICE_ROLE_KEY || '';
-
-if (!url || !serviceKey) {
-  console.warn('Supabase service role key not configured. Indexer webhook will fail.');
-}
-
-const supabase = createClient(url, serviceKey, { 
-  auth: { persistSession: false } 
-});
+// Initialize Supabase (centralized client)
+const supabase = getSupabaseClient();
 
 /**
  * Webhook endpoint called by chain indexer when a transaction is mined/confirmed
