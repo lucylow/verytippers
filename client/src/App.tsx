@@ -60,20 +60,25 @@ function RouteErrorBoundary({ children, route }: { children: React.ReactNode; ro
  */
 function Router() {
   // Memoize valid routes to avoid recreation on each render
-  const validRoutes = useMemo(() => [
-    "/", 
-    "/dao", 
-    "/demo", 
-    "/mock-demo", 
-    "/nft", 
-    "/p2p", 
-    "/verychain", 
-    "/checkout/success", 
-    "/checkout/cancel", 
-    "/tokens", 
-    "/admin/ads",
-    "/404"
-  ], []);
+  const validRoutes = useMemo(
+    () => [
+      "/",
+      "/dao",
+      "/demo",
+      "/tipdemo",
+      "/mock-demo",
+      "/nft",
+      "/nftmarketplace",
+      "/p2p",
+      "/verychain",
+      "/checkout/success",
+      "/checkout/cancel",
+      "/tokens",
+      "/admin/ads",
+      "/404",
+    ],
+    []
+  );
 
   // Error handler with recovery
   const handleErrorWithRecovery = useCallback(
@@ -409,18 +414,31 @@ function Router() {
           <DAO />
         </RouteErrorBoundary>
       </Route>
+
       <Route path="/demo">
         <RouteErrorBoundary route="/demo">
           <TipDemo />
         </RouteErrorBoundary>
       </Route>
+      <Route path="/tipdemo">
+        <RouteErrorBoundary route="/tipdemo">
+          <TipDemo />
+        </RouteErrorBoundary>
+      </Route>
+
       <Route path="/mock-demo">
         <RouteErrorBoundary route="/mock-demo">
           <MockDemo />
         </RouteErrorBoundary>
       </Route>
+
       <Route path="/nft">
         <RouteErrorBoundary route="/nft">
+          <NFTMarketplace />
+        </RouteErrorBoundary>
+      </Route>
+      <Route path="/nftmarketplace">
+        <RouteErrorBoundary route="/nftmarketplace">
           <NFTMarketplace />
         </RouteErrorBoundary>
       </Route>
