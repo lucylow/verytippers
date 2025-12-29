@@ -90,6 +90,7 @@
     "input-otp": "^1.4.2",
     "ioredis": "^5.8.2",
     "ipfs-http-client": "^60.0.1",
+    "lovable-tagger": "^1.1.13",
     "lucide-react": "^0.453.0",
     "nanoid": "^5.1.5",
     "next-themes": "^0.4.6",

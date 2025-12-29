@@ -6,13 +6,18 @@ import path from "path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
+import { componentTagger } from "lovable-tagger";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime()];
-
-export default defineConfig({
-  plugins,
+export default defineConfig(({ mode }) => ({
+  plugins: [
+    react(),
+    tailwindcss(),
+    jsxLocPlugin(),
+    vitePluginManusRuntime(),
+    mode === 'development' && componentTagger(),
+  ].filter(Boolean),
   define: { 'process.env': {} },
   resolve: {
     alias: {
@@ -45,4 +50,4 @@ export default defineConfig({
       deny: ["**/.*"],
     },
   },
-});
+}));
