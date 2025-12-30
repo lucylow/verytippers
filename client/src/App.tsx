@@ -25,6 +25,7 @@ import MobileShell from "./components/MobileShell";
 import { TransactionAnnouncerProvider } from "./components/accessibility";
 import { ScrollToTop } from "./components/ScrollToTop";
 import { ApiClientSetup } from "./components/ApiClientSetup";
+import { Navbar } from "./components/Navbar";
 
 // Import improved error handling utilities
 import { categorizeError, type CategorizedError } from "@/lib/errors/errorTypes";
@@ -571,10 +572,13 @@ function App() {
                     <TooltipProvider>
                       <Toaster />
                       <MobileShell>
-                        <div className="fixed top-4 right-4 z-50">
+                        <Navbar />
+                        <div className="fixed top-20 right-4 z-40">
                           <NetworkSelector />
                         </div>
-                        <Router />
+                        <main className="pt-16">
+                          <Router />
+                        </main>
                         <VoiceTippingButton />
                       </MobileShell>
                     </TooltipProvider>
