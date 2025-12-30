@@ -1,20 +1,23 @@
 import { useState, useEffect, useRef } from "react";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Sparkles } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { WalletButton } from "./WalletButton";
 import { VeryLogo } from "./brand";
 import { NavLink } from "./NavLink";
 import { cn } from "@/lib/utils";
+import { useDemo } from "@/contexts/DemoContext";
+import { Switch } from "./ui/switch";
+import { Badge } from "./ui/badge";
 
-// Navigation routes configuration
+// Navigation routes configuration - all 10 pages
 const navRoutes = [
   { href: "/", label: "Home", exact: true },
-  { href: "/demo", label: "Live Demo" },
-  { href: "/nft", label: "NFT Marketplace" },
-  { href: "/p2p", label: "P2P Demo" },
-  { href: "/tokens", label: "Token Ecosystem" },
+  { href: "/demo", label: "Tip Demo" },
+  { href: "/p2p", label: "P2P" },
+  { href: "/nft", label: "NFT" },
+  { href: "/tokens", label: "Tokens" },
   { href: "/dao", label: "DAO" },
-  { href: "/verychain", label: "Verychain" },
+  { href: "/verychain", label: "Chain" },
 ];
 
 export const Navbar = () => {
@@ -22,6 +25,20 @@ export const Navbar = () => {
   const [location] = useLocation();
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
+  
+  // Safe access to demo context (may not be wrapped yet)
+  let demoMode = true;
+  let setDemoMode = (_: boolean) => {};
+  let user = null;
+  
+  try {
+    const demoContext = useDemo();
+    demoMode = demoContext.demoMode;
+    setDemoMode = demoContext.setDemoMode;
+    user = demoContext.user;
+  } catch {
+    // Context not available, use defaults
+  }
 
   // Close mobile menu when route changes
   useEffect(() => {
@@ -91,36 +108,55 @@ export const Navbar = () => {
             </Link>
 
             {/* Desktop Navigation */}
-            <div className="hidden md:flex items-center gap-6 lg:gap-8">
+            <div className="hidden md:flex items-center gap-4 lg:gap-6">
               {navRoutes.map((route) => (
                 <NavLink
                   key={route.href}
                   href={route.href}
                   exact={route.exact}
-                  className="pb-1"
+                  className="pb-1 text-sm"
                   activeClassName="font-semibold"
                 >
                   {route.label}
                 </NavLink>
               ))}
+              
+              {/* Demo Mode Toggle */}
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/50 rounded-full border border-border">
+                <Sparkles className="h-3.5 w-3.5 text-primary" />
+                <span className="text-xs font-medium">Demo</span>
+                <Switch
+                  checked={demoMode}
+                  onCheckedChange={setDemoMode}
+                  className="scale-75"
+                />
+              </div>
+              
+              {demoMode && (
+                <Badge variant="secondary" className="text-xs">
+                  {user?.displayName || 'Demo User'}
+                </Badge>
+              )}
+              
               <WalletButton />
-              <button className="gradient-bg text-primary-foreground px-5 py-2.5 rounded-xl font-semibold hover:opacity-90 transition-opacity flex items-center gap-2">
-                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                </svg>
-                Try in VeryChat
-              </button>
             </div>
 
             {/* Mobile Menu Toggle */}
-            <button
-              className="md:hidden text-foreground p-2 rounded-md hover:bg-accent transition-colors"
-              onClick={() => setIsOpen(!isOpen)}
-              aria-label={isOpen ? "Close menu" : "Open menu"}
-              aria-expanded={isOpen}
-            >
-              {isOpen ? <X size={24} /> : <Menu size={24} />}
-            </button>
+            <div className="flex items-center gap-2 md:hidden">
+              {demoMode && (
+                <Badge variant="secondary" className="text-xs">
+                  Demo
+                </Badge>
+              )}
+              <button
+                className="text-foreground p-2 rounded-md hover:bg-accent transition-colors"
+                onClick={() => setIsOpen(!isOpen)}
+                aria-label={isOpen ? "Close menu" : "Open menu"}
+                aria-expanded={isOpen}
+              >
+                {isOpen ? <X size={24} /> : <Menu size={24} />}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -144,12 +180,22 @@ export const Navbar = () => {
                 {route.label}
               </NavLink>
             ))}
+            
+            {/* Demo Mode Toggle - Mobile */}
+            <div className="flex items-center justify-between px-4 py-3 mt-2 bg-muted/30 rounded-lg">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-primary" />
+                <span className="text-sm font-medium">Demo Mode</span>
+              </div>
+              <Switch
+                checked={demoMode}
+                onCheckedChange={setDemoMode}
+              />
+            </div>
+            
             <div className="pt-4 mt-4 border-t border-border">
               <WalletButton />
             </div>
-            <button className="gradient-bg text-primary-foreground px-5 py-3 rounded-xl font-semibold w-full mt-4 hover:opacity-90 transition-opacity">
-              Try in VeryChat
-            </button>
           </div>
         </div>
       </nav>

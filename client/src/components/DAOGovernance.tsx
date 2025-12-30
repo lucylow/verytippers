@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { DAOService, VoterPower, DAOStats } from '@/services/dao';
-import { Loader2, TrendingUp, Users, Coins, Award, Vote, AlertCircle, CheckCircle2, FileText, Activity, Trophy } from 'lucide-react';
+import { Loader2, TrendingUp, Users, Coins, Award, Vote, AlertCircle, CheckCircle2, FileText, Activity, Trophy, Sparkles } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ethers } from 'ethers';
 import { ProposalBrowser } from './DAO/ProposalBrowser';
@@ -14,9 +14,12 @@ import { ProposalDetail } from './DAO/ProposalDetail';
 import { ProposalCreator } from './DAO/ProposalCreator';
 import { DAOActivityFeed } from './DAO/DAOActivityFeed';
 import { CommunityLeaderboard } from './DAO/CommunityLeaderboard';
+import { useDemo } from '@/contexts/DemoContext';
+import { Badge } from './ui/badge';
 
 export const DAOGovernance: React.FC = () => {
   const { provider, signer, isConnected, address } = useVeryTippers();
+  const { demoMode, data: demoData } = useDemo();
   const [daoService, setDaoService] = useState<DAOService | null>(null);
   const [power, setPower] = useState<VoterPower | null>(null);
   const [stats, setStats] = useState<DAOStats | null>(null);
@@ -29,7 +32,31 @@ export const DAOGovernance: React.FC = () => {
   const [selectedProposalId, setSelectedProposalId] = useState<bigint | null>(null);
   const [showCreateProposal, setShowCreateProposal] = useState(false);
 
+  // Demo mode data
+  const demoPower: VoterPower = {
+    tokenPower: BigInt(demoData.dao.voterPower.tokenPower * 1e18),
+    nftPower: BigInt(demoData.dao.voterPower.nftPower * 1e18),
+    tipsPower: BigInt(demoData.dao.voterPower.tipsPower * 1e18),
+    totalPower: BigInt(demoData.dao.voterPower.totalPower * 1e18)
+  };
+
+  const demoStats: DAOStats = {
+    totalSupply: BigInt(demoData.dao.totalSupply * 1e18),
+    treasury: BigInt(demoData.dao.treasury * 1e18),
+    activeProposals: BigInt(demoData.dao.activeProposals)
+  };
+
   useEffect(() => {
+    if (demoMode) {
+      // Use demo data
+      setPower(demoPower);
+      setStats(demoStats);
+      setMemberTips(BigInt(420 * 1e18));
+      setProposalThreshold(BigInt(100 * 1e18));
+      setCurrentBlock(1234567);
+      return;
+    }
+
     if (provider && signer && isConnected) {
       const service = new DAOService(provider, signer);
       if (service.isInitialized()) {
@@ -43,9 +70,10 @@ export const DAOGovernance: React.FC = () => {
       setPower(null);
       setStats(null);
     }
-  }, [provider, signer, isConnected]);
+  }, [provider, signer, isConnected, demoMode]);
 
   const loadData = async () => {
+    if (demoMode) return;
     if (!daoService || !address) return;
     
     setIsLoading(true);
@@ -100,14 +128,26 @@ export const DAOGovernance: React.FC = () => {
     return ethers.formatEther(value);
   };
 
-  if (!isConnected) {
+  // Show content in demo mode even without wallet
+  if (!isConnected && !demoMode) {
     return (
       <Card className="p-6 bg-gradient-to-r from-indigo-900/50 to-purple-900/50">
         <Alert>
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            Please connect your wallet to view DAO governance.
+            Please connect your wallet to view DAO governance, or enable Demo Mode from the navbar.
           </AlertDescription>
+        </Alert>
+      </Card>
+    );
+  }
+
+  if (error && !daoService && !demoMode) {
+    return (
+      <Card className="p-6">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
         </Alert>
       </Card>
     );
