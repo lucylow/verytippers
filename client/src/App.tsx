@@ -8,6 +8,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { NetworkProvider } from "./contexts/NetworkContext";
 import { WalletProvider } from "./contexts/WalletContext";
+import { DemoProvider } from "./contexts/DemoContext";
 import Home from "./pages/Home";
 import DAO from "./pages/DAO";
 import TipDemo from "./pages/TipDemo";
@@ -567,22 +568,24 @@ function App() {
             <NetworkProvider>
               <ContextProviderWrapper>
                 <WalletProvider>
-                  <ApiClientSetup />
-                  <ContextProviderWrapper>
-                    <TooltipProvider>
-                      <Toaster />
-                      <MobileShell>
-                        <Navbar />
-                        <div className="fixed top-20 right-4 z-40">
-                          <NetworkSelector />
-                        </div>
-                        <main className="pt-16">
-                          <Router />
-                        </main>
-                        <VoiceTippingButton />
-                      </MobileShell>
-                    </TooltipProvider>
-                  </ContextProviderWrapper>
+                  <DemoProvider>
+                    <ApiClientSetup />
+                    <ContextProviderWrapper>
+                      <TooltipProvider>
+                        <Toaster />
+                        <MobileShell>
+                          <Navbar />
+                          <div className="fixed top-20 right-4 z-40">
+                            <NetworkSelector />
+                          </div>
+                          <main className="pt-16">
+                            <Router />
+                          </main>
+                          <VoiceTippingButton />
+                        </MobileShell>
+                      </TooltipProvider>
+                    </ContextProviderWrapper>
+                  </DemoProvider>
                 </WalletProvider>
               </ContextProviderWrapper>
             </NetworkProvider>
