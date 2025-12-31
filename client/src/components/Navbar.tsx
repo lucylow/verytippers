@@ -164,8 +164,8 @@ export const Navbar = () => {
         <div
           ref={mobileMenuRef}
           className={cn(
-            "md:hidden absolute top-16 left-0 right-0 bg-background border-b border-border shadow-lg transition-all duration-300 ease-in-out overflow-hidden",
-            isOpen ? "max-h-screen opacity-100" : "max-h-0 opacity-0"
+            "md:hidden absolute top-16 left-0 right-0 bg-background border-b border-border shadow-lg transition-all duration-300 ease-in-out overflow-hidden z-50",
+            isOpen ? "max-h-[80vh] opacity-100 pointer-events-auto" : "max-h-0 opacity-0 pointer-events-none"
           )}
         >
           <div className="px-4 py-4 space-y-1">

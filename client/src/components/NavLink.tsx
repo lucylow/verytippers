@@ -38,7 +38,14 @@ export function NavLink({
   );
 
   return (
-    <Link href={href} className={linkClasses}>
+    <Link 
+      href={href} 
+      className={linkClasses}
+      onClick={(e) => {
+        // Ensure click propagates properly for mobile menu
+        e.stopPropagation();
+      }}
+    >
       <span className="relative z-10">{children}</span>
       {isActive && !isMobileLink && (
         <span 
