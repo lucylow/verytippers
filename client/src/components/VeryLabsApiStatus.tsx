@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { CheckCircle2, XCircle, AlertCircle, RefreshCw, ExternalLink } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
 interface ApiStatus {
   isConfigured: boolean;
   isHealthy: boolean;
   lastCheck?: string;
   rateLimitRemaining?: number;
+  projectId?: string;
   error?: string;
 }
 
@@ -17,11 +19,15 @@ export const VeryLabsApiStatus = () => {
   const checkStatus = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/verychat/status');
-      const data = await response.json();
+      const { data, error } = await supabase.functions.invoke('verychat-api', {
+        body: {},
+      });
+      
+      if (error) throw error;
       setStatus(data);
       setLastRefresh(new Date());
     } catch (error) {
+      console.error('Status check error:', error);
       setStatus({
         isConfigured: false,
         isHealthy: false,
